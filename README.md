@@ -22,13 +22,15 @@ As framed by the **World Health Organization (WHO)**, health literacy involves t
 
 ## 2. What Works in This Prototype
 
-1. **Curated Public-Health Topic Selection:**
+1. **Curated Public-Health Topic Selection (4 CDC-Grounded Modules):**
    - **Proper Handwashing (`ہاتھ دھونے کا درست طریقہ`)** grounded in CDC's *About Handwashing*.
    - **Healthy Sleep Basics (`صحت مند نیند کے بنیادی اصول`)** grounded in CDC's *About Sleep*.
+   - **Physical Activity Basics (`جسمانی سرگرمی اور ورزش کے فوائد`)** grounded in CDC's *Benefits of Physical Activity*.
+   - **Water & Healthy Hydration (`پانی اور صحت مند مشروبات`)** grounded in CDC's *About Water and Healthier Drinks*.
 2. **Bilingual Language Selector (`English` / `اردو`):**
-   - Full Unicode Urdu rendering with dynamic `lang="ur"` and `dir="rtl"` on localized explanation, key takeaway, quiz, and follow-up blocks while preserving clean LTR rendering for URLs and controls.
+   - Full Unicode Urdu rendering with dynamic `lang="ur"` and `dir="rtl"` on localized explanation, key takeaway, quiz, and direct Q&A blocks while preserving clean LTR rendering for URLs and controls.
 3. **Live Server-Side Gemini AI Integration (`POST /api/explain`):**
-   - Uses the official **`google-genai`** Python SDK server-side.
+   - Uses the official **`google-genai`** Python SDK server-side with structured JSON schema enforcement and configurable request timeouts (`GEMINI_TIMEOUT_MS`).
    - Grounded strictly in the selected topic's human-reviewed public-health facts (`content/topics.json`).
    - Generates a plain-language explanation, **3 key takeaways**, and a **3-option multiple-choice comprehension quiz** with explanatory feedback.
    - Validates the structured JSON schema on the server before returning `live_ai: true`.
@@ -36,10 +38,10 @@ As framed by the **World Health Organization (WHO)**, health literacy involves t
    - The server attaches the authoritative source title and URL directly from the curated local dataset (`content/topics.json`), never from an AI-improvised citation string.
 5. **Interactive Comprehension Quiz:**
    - Tests user understanding of the generated explanation and reveals immediate explanatory feedback upon submission.
-6. **Optional Constrained Follow-Up Question (`POST /api/ask`):**
-   - Answers short educational questions strictly within the selected topic's approved CDC facts, with a local clinical/emergency/privacy safety boundary gate.
-7. **Accessibility & Graceful Voice Read-Aloud:**
-   - Keyboard focus states, skip link, ARIA live regions, `Aa+` large-text toggle, and optional browser `speechSynthesis` read-aloud (gracefully disabled when a matching device voice is unavailable).
+6. **Always-Visible Direct AI Q&A (`POST /api/ask`) & Suggested Chips:**
+   - Visible right on the home screen (`Ask SehatSaathi AI Directly`) with one-click bilingual suggested questions. Answers short educational questions strictly within the curated CDC facts, guarded by a local clinical/emergency/privacy safety boundary gate.
+7. **Accessibility, Voice Read-Aloud (`speechSynthesis`) & Speech-to-Text (`SpeechRecognition`):**
+   - Keyboard focus states, skip link, ARIA live regions, `Aa+` large-text toggle, optional browser `speechSynthesis` read-aloud, and free browser-based **Speech-to-Text microphone input (`#mic-btn`)** supporting English (`en-US`) and Urdu (`ur-PK`) that populates the question input for user review before sending.
 8. **Truthful Error Handling:**
    - Never substitutes prewritten/mocked text as fake live AI output when the API key is unconfigured or the network is unavailable.
 
@@ -87,7 +89,11 @@ All educational explanations are grounded exclusively in concise, paraphrased pu
    - URL: https://www.cdc.gov/clean-hands/about/
 2. **Centers for Disease Control and Prevention (CDC) — About Sleep**
    - URL: https://www.cdc.gov/sleep/about/
-3. **World Health Organization (WHO) — Health Literacy & Plain Language Communication Principles**
+3. **Centers for Disease Control and Prevention (CDC) — Benefits of Physical Activity**
+   - URL: https://www.cdc.gov/physical-activity-basics/benefits/
+4. **Centers for Disease Control and Prevention (CDC) — About Water and Healthier Drinks**
+   - URL: https://www.cdc.gov/healthy-weight-growth/water-healthy-drinks/
+5. **World Health Organization (WHO) — Health Literacy & Plain Language Communication Principles**
    - URL: https://www.who.int/news-room/fact-sheets/detail/health-literacy
    - URL: https://www.who.int/about/communications/understandable/plain-language
 
@@ -244,6 +250,6 @@ specifies that model names should match those returned by `ListModels`.
 - **Proposed First Pilot:** Partner with a university student-health program or local community education NGO to test comprehension improvements across 5–10 vetted preventive health modules.
 - **Sustainability Hypothesis:** Keep core public-health literacy modules free for individuals while offering institutional licensing for schools, NGOs, and workplace wellness programs needing custom reviewed topic libraries and aggregated (non-personal) comprehension insights.
 - **Known Limitations & Next Validation Steps:**
-  - Currently supports 2 curated topics (`handwashing` and `sleep`); expanding requires human subject-matter review of each new source file.
-  - Browser voice synthesis (`speechSynthesis`) depends on whether an Urdu TTS voice is installed on the user's operating system.
+  - Currently supports 4 curated CDC topics (`handwashing`, `sleep`, `activity`, and `hydration`); expanding requires human subject-matter review of each new source file.
+  - Browser voice synthesis (`speechSynthesis`) and speech recognition (`SpeechRecognition`) depend on browser support (Chrome/Edge recommended for speech-to-text) and whether an Urdu TTS voice is installed on the user's operating system.
   - Requires formal readability testing with native Urdu speakers and review by public-health educators before real-world pilot deployment.
