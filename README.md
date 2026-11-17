@@ -39,9 +39,9 @@ As framed by the **World Health Organization (WHO)**, health literacy involves t
 5. **Interactive Comprehension Quiz:**
    - Tests user understanding of the generated explanation and reveals immediate explanatory feedback upon submission.
 6. **Always-Visible Direct AI Q&A (`POST /api/ask`) & Suggested Chips:**
-   - Visible right on the home screen (`Ask SehatSaathi AI Directly`) with one-click bilingual suggested questions. Answers short educational questions strictly within the curated CDC facts, guarded by a local clinical/emergency/privacy safety boundary gate.
-7. **Accessibility, Voice Read-Aloud (`speechSynthesis`) & Speech-to-Text (`SpeechRecognition`):**
-   - Keyboard focus states, skip link, ARIA live regions, `Aa+` large-text toggle, optional browser `speechSynthesis` read-aloud, and free browser-based **Speech-to-Text microphone input (`#mic-btn`)** supporting English (`en-US`) and Urdu (`ur-PK`) that populates the question input for user review before sending.
+   - Visible right on the home screen (`Ask SehatSaathi AI Directly`) with one-click bilingual suggested questions. Answers topic-specific questions grounded in curated CDC facts (`supported_by_source: true`) as well as general everyday health-literacy concepts in plain language (`supported_by_source: false`, labeled transparently in the UI), guarded by a local clinical/emergency/privacy safety boundary gate.
+7. **Accessibility, Auto Voice Response (`speechSynthesis`) & Hybrid Speech-to-Text (`SpeechRecognition` + `/api/transcribe`):**
+   - Keyboard focus states, skip link, ARIA live regions, `Aa+` large-text toggle, automatic and on-demand browser `speechSynthesis` read-aloud (`Listen` / `Stop`), and browser **Speech-to-Text microphone input (`#mic-btn`)** supporting English (`en-US`) and Urdu (`ur-PK`) with an automatic `MediaRecorder` + Gemini in-memory transcription fallback (`POST /api/transcribe`) when browser speech services fail.
 8. **Truthful Error Handling:**
    - Never substitutes prewritten/mocked text as fake live AI output when the API key is unconfigured or the network is unavailable.
 
