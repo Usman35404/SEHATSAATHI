@@ -76,6 +76,15 @@
   const followupSourceNote = document.getElementById("followup-source-note");
   const followupAnswerText = document.getElementById("followup-answer-text");
   const directAskTopicName = document.getElementById("direct-ask-topic-name");
+  const micBtn = document.getElementById("mic-btn");
+  const micBtnLabel = document.getElementById("mic-btn-label");
+  const micStatusNote = document.getElementById("mic-status-note");
+
+  // Web Speech API (Speech-to-Text) state
+  const SpeechRecognitionCtor =
+    window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  let recognitionInstance = null;
+  let isRecognizing = false;
 
   // Usability helpers (loading progress, model badge, suggestions, config check)
   const loadingElapsed = document.getElementById("loading-elapsed");
@@ -261,6 +270,9 @@
         ? "اس موضوع کے بارے میں مختصر تعلیمی سوال پوچھیں..."
         : "e.g., How many seconds should I scrub my hands with soap?";
     }
+
+    stopMicRecognition();
+    updateMicUI();
   }
 
   function setLoadingState(loading) {
@@ -327,9 +339,14 @@
 
   function resetFollowupUI() {
     ++state.activeFollowupRequestId;
+    stopMicRecognition();
     followupSubmitBtn.disabled = false;
     if (followupInput) {
       followupInput.value = "";
+    }
+    if (micStatusNote && SpeechRecognitionCtor) {
+      micStatusNote.classList.add("hidden");
+      micStatusNote.textContent = "";
     }
     if (followupLoading) {
       followupLoading.classList.add("hidden");
@@ -597,6 +614,131 @@
 
   if (stopAudioBtn) {
     stopAudioBtn.addEventListener("click", stopSpeech);
+  }
+
+  // Web Speech API: Speech-to-Text (Microphone Input — Option A: populate input for review)
+  function updateMicUI() {
+    if (!micBtn) return;
+    if (!SpeechRecognitionCtor) {
+      micBtn.disabled = true;
+      micBtn.setAttribute("aria-pressed", "false");
+      if (micBtnLabel) micBtnLabel.textContent = "Mic N/A";
+      if (micStatusNote) {
+        micStatusNote.textContent =
+          "Voice input is not supported in this browser (use Chrome or Edge for speech-to-text).";
+        micStatusNote.classList.remove("hidden");
+      }
+      return;
+    }
+
+    const isUrdu = state.selectedLanguage === "ur";
+    micBtn.disabled = false;
+    micBtn.classList.toggle("is-listening", isRecognizing);
+    micBtn.setAttribute("aria-pressed", isRecognizing ? "true" : "false");
+    if (micBtnLabel) {
+      if (isRecognizing) {
+        micBtnLabel.textContent = isUrdu ? "سن رہا ہے..." : "Listening...";
+      } else {
+        micBtnLabel.textContent = isUrdu ? "بولیں (Mic)" : "Speak";
+      }
+    }
+  }
+
+  function stopMicRecognition() {
+    if (recognitionInstance && isRecognizing) {
+      try {
+        recognitionInstance.stop();
+      } catch {
+        /* ignore stop errors */
+      }
+    }
+    isRecognizing = false;
+    updateMicUI();
+  }
+
+  if (micBtn && SpeechRecognitionCtor) {
+    micBtn.addEventListener("click", () => {
+      if (isRecognizing) {
+        stopMicRecognition();
+        if (micStatusNote) {
+          micStatusNote.classList.add("hidden");
+        }
+        return;
+      }
+
+      stopSpeech();
+      const targetLang = state.selectedLanguage === "ur" ? "ur-PK" : "en-US";
+      const isUrdu = state.selectedLanguage === "ur";
+
+      recognitionInstance = new SpeechRecognitionCtor();
+      recognitionInstance.lang = targetLang;
+      recognitionInstance.continuous = false;
+      recognitionInstance.interimResults = true;
+      recognitionInstance.maxAlternatives = 1;
+
+      recognitionInstance.onstart = () => {
+        isRecognizing = true;
+        updateMicUI();
+        if (micStatusNote) {
+          micStatusNote.textContent = isUrdu
+            ? "مائیکروفون فعال ہے (اردو ur-PK) — اپنا سوال بولیں..."
+            : "Listening in English (en-US) — speak your question now...";
+          micStatusNote.classList.remove("hidden");
+        }
+      };
+
+      recognitionInstance.onresult = (event) => {
+        let transcript = "";
+        for (let i = 0; i < event.results.length; i += 1) {
+          transcript += event.results[i][0].transcript;
+        }
+        const trimmed = transcript.trim().slice(0, 280);
+        if (followupInput && trimmed) {
+          followupInput.value = trimmed;
+        }
+      };
+
+      recognitionInstance.onerror = (event) => {
+        isRecognizing = false;
+        updateMicUI();
+        if (micStatusNote) {
+          const code = event && event.error ? event.error : "unknown";
+          if (code === "not-allowed" || code === "service-not-allowed") {
+            micStatusNote.textContent = isUrdu
+              ? "مائیکروفون کی اجازت نہیں ملی۔ براہِ کرم براؤزر میں مائیک کی اجازت دیں۔"
+              : "Microphone permission was denied. Please allow microphone access in your browser.";
+          } else if (code === "no-speech") {
+            micStatusNote.textContent = isUrdu
+              ? "کوئی آواز سنائی نہیں دی۔ دوبارہ کوشش کریں۔"
+              : "No speech detected. Click Speak to try again.";
+          } else {
+            micStatusNote.textContent = isUrdu
+              ? "آواز شناخت نہیں ہو سکی۔ آپ اپنا سوال ٹائپ بھی کر سکتے ہیں۔"
+              : "Could not capture speech right now. You can also type your question directly.";
+          }
+          micStatusNote.classList.remove("hidden");
+        }
+      };
+
+      recognitionInstance.onend = () => {
+        isRecognizing = false;
+        updateMicUI();
+        if (micStatusNote && followupInput && followupInput.value.trim()) {
+          micStatusNote.textContent = isUrdu
+            ? "آپ کا سوال درج ہو گیا ہے۔ تصدیق کے بعد 'Ask AI' دبائیں۔"
+            : "Speech captured in the box above. Review it and click 'Ask AI'.";
+          micStatusNote.classList.remove("hidden");
+          followupInput.focus();
+        }
+      };
+
+      try {
+        recognitionInstance.start();
+      } catch {
+        isRecognizing = false;
+        updateMicUI();
+      }
+    });
   }
 
   // Event Listener: Direct / Constrained Follow-Up Question

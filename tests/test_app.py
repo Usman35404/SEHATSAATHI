@@ -21,7 +21,11 @@ def test_home_page_renders_200_and_contains_required_elements():
     assert "General health education — not diagnosis or treatment." in html
     assert "Proper Handwashing" in html
     assert "Healthy Sleep Basics" in html
+    assert "Physical Activity Basics" in html
+    assert "Water &amp; Healthy Hydration" in html or "Water & Healthy Hydration" in html
     assert "ہاتھ دھونے کا درست طریقہ" in html
+    assert 'id="mic-btn"' in html
+    assert 'id="followup-input"' in html
 
 
 def test_health_endpoint_never_leaks_secrets(monkeypatch):

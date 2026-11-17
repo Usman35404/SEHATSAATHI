@@ -934,6 +934,53 @@ body {
   font-weight: 600;
 }
 
+.mic-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1.5px solid var(--border-strong);
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+
+.mic-btn:hover:not(:disabled) {
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+}
+
+.mic-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.mic-btn.is-listening {
+  background-color: var(--error-bg);
+  border-color: var(--error-border);
+  color: var(--error-text);
+  animation: mic-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes mic-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(220, 38, 38, 0);
+  }
+}
+
+.mic-status-note {
+  margin: 0.45rem 0 0;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
 @media (max-width: 600px) {
   .brand__title { font-size: 1.2rem; }
   .header-controls { width: 100%; justify-content: space-between; }
