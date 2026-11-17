@@ -322,12 +322,7 @@
         : "e.g., How many seconds should I scrub my hands with soap?";
     }
 
-    const wasListening = wantListening || isRecognizing;
-    stopMicRecognition();
     updateMicUI();
-    if (wasListening && SpeechRecognitionCtor) {
-      startMicRecognition();
-    }
   }
 
   function setLoadingState(loading) {
@@ -537,9 +532,13 @@
     btn.addEventListener("click", () => {
       const newTopicId = btn.dataset.topicId;
       if (newTopicId && newTopicId !== state.selectedTopicId) {
+        const wasMicActive = wantListening || isRecognizing;
         state.selectedTopicId = newTopicId;
-        updateSelectionUI();
         clearStaleResults();
+        updateSelectionUI();
+        if (wasMicActive && SpeechRecognitionCtor) {
+          startMicRecognition();
+        }
       }
     });
   });
@@ -550,9 +549,13 @@
     btn.addEventListener("click", () => {
       const newLang = btn.dataset.lang;
       if (newLang && newLang !== state.selectedLanguage) {
+        const wasMicActive = wantListening || isRecognizing;
         state.selectedLanguage = newLang;
-        updateSelectionUI();
         clearStaleResults();
+        updateSelectionUI();
+        if (wasMicActive && SpeechRecognitionCtor) {
+          startMicRecognition();
+        }
       }
     });
   });
@@ -741,19 +744,20 @@
     updateMicUI();
   }
 
-  function startMicRecognition() {
+  function startMicRecognition(langOverride) {
     if (!SpeechRecognitionCtor) return;
     stopSpeech();
 
-    const targetLang = state.selectedLanguage === "ur" ? "ur-PK" : "en-US";
     const isUrdu = state.selectedLanguage === "ur";
+    // Try 'ur-PK' first for Urdu, with automatic fallback to 'ur' or 'en-US' if browser rejects 'ur-PK'
+    const targetLang = langOverride || (isUrdu ? "ur-PK" : "en-US");
     wantListening = true;
 
     const instance = new SpeechRecognitionCtor();
     recognitionInstance = instance;
     instance.lang = targetLang;
-    // Keep mic active across brief pauses in Urdu/English until user clicks stop or speaks a complete phrase
-    instance.continuous = true;
+    // Continuous false is more widely supported across locales (including ur-PK on Windows Chrome/Edge)
+    instance.continuous = false;
     instance.interimResults = true;
     instance.maxAlternatives = 1;
 
@@ -762,8 +766,8 @@
       updateMicUI();
       if (micStatusNote) {
         micStatusNote.textContent = isUrdu
-          ? "مائیکروفون فعال ہے (اردو ur-PK) — اپنا سوال بولیں (روکنے کے لیے دوبارہ دبائیں)..."
-          : "Listening in English (en-US) — speak your question (click again when done)...";
+          ? "مائیکروفون فعال ہے — ابھی اپنا سوال بولیں..."
+          : "Listening — speak your question now...";
         micStatusNote.classList.remove("hidden");
       }
     };
@@ -781,30 +785,51 @@
 
     instance.onerror = (event) => {
       const code = event && event.error ? event.error : "unknown";
-      // In Urdu mode, Chrome sometimes fires 'no-speech' quickly before the user starts speaking;
-      // if the user hasn't clicked Stop, keep listening seamlessly.
-      if (code === "no-speech" && wantListening) {
+      // If browser doesn't support 'ur-PK' locale tag directly, retry seamlessly with 'ur' then 'hi-IN' / 'en-US'
+      if (
+        (code === "language-not-supported" || code === "bad-grammar") &&
+        wantListening
+      ) {
+        if (targetLang === "ur-PK") {
+          startMicRecognition("ur");
+          return;
+        }
+        if (targetLang === "ur") {
+          startMicRecognition("en-US");
+          return;
+        }
+      }
+
+      if ((code === "no-speech" || code === "aborted") && wantListening) {
         return;
       }
+
       wantListening = false;
       isRecognizing = false;
       updateMicUI();
       if (micStatusNote) {
         if (code === "not-allowed" || code === "service-not-allowed") {
           micStatusNote.textContent = isUrdu
-            ? "مائیکروفون کی اجازت نہیں ملی۔ براہِ کرم براؤزر میں مائیک کی اجازت دیں۔"
-            : "Microphone permission was denied. Please allow microphone access in your browser.";
+            ? "مائیکروفون کی اجازت نہیں ملی۔ براہِ کرم براؤزر ایڈریس بار میں مائیک کی اجازت دیں۔"
+            : "Microphone permission was denied. Please allow microphone access in your browser address bar.";
+        } else if (code === "audio-capture") {
+          micStatusNote.textContent = isUrdu
+            ? "مائیکروفون نہیں ملا۔ براہِ کرم چیک کریں کہ مائیک منسلک ہے۔"
+            : "No microphone found. Please check that a microphone is connected.";
+        } else if (code === "network") {
+          micStatusNote.textContent = isUrdu
+            ? "براؤزر وائس سروس سے رابطہ نہیں ہو سکا (انٹرنیٹ یا کروم درکار ہے)۔"
+            : "Browser speech service network error (use Google Chrome with active internet).";
         } else {
           micStatusNote.textContent = isUrdu
-            ? "آواز شناخت نہیں ہو سکی۔ دوبارہ کوشش کریں یا اپنا سوال ٹائپ کریں۔"
-            : "Could not capture speech right now. Click Speak to try again or type your question.";
+            ? `مائیکروفون نوٹس (${code}): دوبارہ کوشش کریں یا سوال ٹائپ کریں۔`
+            : `Microphone notice (${code}): click Speak to try again or type your question.`;
         }
         micStatusNote.classList.remove("hidden");
       }
     };
 
     instance.onend = () => {
-      // If user already captured text, stop cleanly so they can review & click Ask AI
       if (followupInput && followupInput.value.trim()) {
         wantListening = false;
         isRecognizing = false;
@@ -819,14 +844,14 @@
         return;
       }
 
-      // If browser auto-closed recognition before user spoke (common with ur-PK), restart automatically while wantListening is true
+      // If browser ended before speech was captured and user still wants listening, restart after a short 150ms delay
       if (wantListening) {
-        try {
-          instance.start();
-          return;
-        } catch {
-          /* fall through to stop */
-        }
+        setTimeout(() => {
+          if (wantListening) {
+            startMicRecognition(targetLang);
+          }
+        }, 150);
+        return;
       }
       isRecognizing = false;
       updateMicUI();
