@@ -75,6 +75,9 @@
   const followupBadge = document.getElementById("followup-badge");
   const followupSourceNote = document.getElementById("followup-source-note");
   const followupAnswerText = document.getElementById("followup-answer-text");
+  const followupListenBtn = document.getElementById("followup-listen-btn");
+  const followupListenLabel = document.getElementById("followup-listen-label");
+  const followupStopBtn = document.getElementById("followup-stop-btn");
   const directAskTopicName = document.getElementById("direct-ask-topic-name");
   const micBtn = document.getElementById("mic-btn");
   const micBtnLabel = document.getElementById("mic-btn-label");
@@ -85,6 +88,8 @@
     window.SpeechRecognition || window.webkitSpeechRecognition || null;
   let recognitionInstance = null;
   let isRecognizing = false;
+  let wantListening = false;
+  let lastFollowupPayload = null;
 
   // Usability helpers (loading progress, model badge, suggestions, config check)
   const loadingElapsed = document.getElementById("loading-elapsed");
@@ -184,6 +189,12 @@
     if (listenBtnLabel) {
       listenBtnLabel.textContent = "Listen";
     }
+    if (followupStopBtn) {
+      followupStopBtn.classList.add("hidden");
+    }
+    if (followupListenLabel) {
+      followupListenLabel.textContent = "Listen";
+    }
   }
 
   function getMatchingVoice(langCode) {
@@ -196,6 +207,46 @@
       voices.find((v) => v.lang && v.lang.toLowerCase().startsWith(targetPrefix)) ||
       null
     );
+  }
+
+  function getBestSpokenVoice(langCode) {
+    const exact = getMatchingVoice(langCode);
+    if (exact || !("speechSynthesis" in window)) {
+      return exact;
+    }
+    const voices = window.speechSynthesis.getVoices() || [];
+    if (langCode === "ur") {
+      return (
+        voices.find((v) => v.name && /urdu/i.test(v.name)) ||
+        voices.find((v) => v.lang && v.lang.toLowerCase().startsWith("hi")) ||
+        voices.find((v) => v.lang && v.lang.toLowerCase().startsWith("ar")) ||
+        voices[0] ||
+        null
+      );
+    }
+    return voices[0] || null;
+  }
+
+  function speakTextAloud(text, langCode, onStartUI, onEndUI) {
+    if (!text || !("speechSynthesis" in window)) {
+      return false;
+    }
+    stopSpeech();
+    const voice = getBestSpokenVoice(langCode);
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = langCode === "ur" ? "ur-PK" : "en-US";
+    if (voice) {
+      utterance.voice = voice;
+    }
+    utterance.onend = () => {
+      if (onEndUI) onEndUI();
+    };
+    utterance.onerror = () => {
+      if (onEndUI) onEndUI();
+    };
+    if (onStartUI) onStartUI();
+    window.speechSynthesis.speak(utterance);
+    return true;
   }
 
   function updateSpeechAvailability(langCode) {
@@ -271,8 +322,12 @@
         : "e.g., How many seconds should I scrub my hands with soap?";
     }
 
+    const wasListening = wantListening || isRecognizing;
     stopMicRecognition();
     updateMicUI();
+    if (wasListening && SpeechRecognitionCtor) {
+      startMicRecognition();
+    }
   }
 
   function setLoadingState(loading) {
@@ -616,6 +671,33 @@
     stopAudioBtn.addEventListener("click", stopSpeech);
   }
 
+  if (followupListenBtn) {
+    followupListenBtn.addEventListener("click", () => {
+      if (!lastFollowupPayload || !lastFollowupPayload.answer) return;
+      const isUrdu = lastFollowupPayload.language === "ur";
+      speakTextAloud(
+        lastFollowupPayload.answer,
+        lastFollowupPayload.language,
+        () => {
+          if (followupStopBtn) followupStopBtn.classList.remove("hidden");
+          if (followupListenLabel) {
+            followupListenLabel.textContent = isUrdu ? "بول رہا ہے..." : "Playing...";
+          }
+        },
+        () => {
+          if (followupStopBtn) followupStopBtn.classList.add("hidden");
+          if (followupListenLabel) {
+            followupListenLabel.textContent = isUrdu ? "سنیں (Listen)" : "Listen";
+          }
+        }
+      );
+    });
+  }
+
+  if (followupStopBtn) {
+    followupStopBtn.addEventListener("click", stopSpeech);
+  }
+
   // Web Speech API: Speech-to-Text (Microphone Input — Option A: populate input for review)
   function updateMicUI() {
     if (!micBtn) return;
@@ -645,99 +727,138 @@
   }
 
   function stopMicRecognition() {
-    if (recognitionInstance && isRecognizing) {
+    wantListening = false;
+    if (recognitionInstance) {
+      recognitionInstance.onend = null;
       try {
         recognitionInstance.stop();
       } catch {
         /* ignore stop errors */
       }
+      recognitionInstance = null;
     }
     isRecognizing = false;
     updateMicUI();
   }
 
-  if (micBtn && SpeechRecognitionCtor) {
-    micBtn.addEventListener("click", () => {
-      if (isRecognizing) {
-        stopMicRecognition();
-        if (micStatusNote) {
-          micStatusNote.classList.add("hidden");
-        }
+  function startMicRecognition() {
+    if (!SpeechRecognitionCtor) return;
+    stopSpeech();
+
+    const targetLang = state.selectedLanguage === "ur" ? "ur-PK" : "en-US";
+    const isUrdu = state.selectedLanguage === "ur";
+    wantListening = true;
+
+    const instance = new SpeechRecognitionCtor();
+    recognitionInstance = instance;
+    instance.lang = targetLang;
+    // Keep mic active across brief pauses in Urdu/English until user clicks stop or speaks a complete phrase
+    instance.continuous = true;
+    instance.interimResults = true;
+    instance.maxAlternatives = 1;
+
+    instance.onstart = () => {
+      isRecognizing = true;
+      updateMicUI();
+      if (micStatusNote) {
+        micStatusNote.textContent = isUrdu
+          ? "مائیکروفون فعال ہے (اردو ur-PK) — اپنا سوال بولیں (روکنے کے لیے دوبارہ دبائیں)..."
+          : "Listening in English (en-US) — speak your question (click again when done)...";
+        micStatusNote.classList.remove("hidden");
+      }
+    };
+
+    instance.onresult = (event) => {
+      let transcript = "";
+      for (let i = 0; i < event.results.length; i += 1) {
+        transcript += event.results[i][0].transcript;
+      }
+      const trimmed = transcript.trim().slice(0, 280);
+      if (followupInput && trimmed) {
+        followupInput.value = trimmed;
+      }
+    };
+
+    instance.onerror = (event) => {
+      const code = event && event.error ? event.error : "unknown";
+      // In Urdu mode, Chrome sometimes fires 'no-speech' quickly before the user starts speaking;
+      // if the user hasn't clicked Stop, keep listening seamlessly.
+      if (code === "no-speech" && wantListening) {
         return;
       }
-
-      stopSpeech();
-      const targetLang = state.selectedLanguage === "ur" ? "ur-PK" : "en-US";
-      const isUrdu = state.selectedLanguage === "ur";
-
-      recognitionInstance = new SpeechRecognitionCtor();
-      recognitionInstance.lang = targetLang;
-      recognitionInstance.continuous = false;
-      recognitionInstance.interimResults = true;
-      recognitionInstance.maxAlternatives = 1;
-
-      recognitionInstance.onstart = () => {
-        isRecognizing = true;
-        updateMicUI();
-        if (micStatusNote) {
+      wantListening = false;
+      isRecognizing = false;
+      updateMicUI();
+      if (micStatusNote) {
+        if (code === "not-allowed" || code === "service-not-allowed") {
           micStatusNote.textContent = isUrdu
-            ? "مائیکروفون فعال ہے (اردو ur-PK) — اپنا سوال بولیں..."
-            : "Listening in English (en-US) — speak your question now...";
-          micStatusNote.classList.remove("hidden");
+            ? "مائیکروفون کی اجازت نہیں ملی۔ براہِ کرم براؤزر میں مائیک کی اجازت دیں۔"
+            : "Microphone permission was denied. Please allow microphone access in your browser.";
+        } else {
+          micStatusNote.textContent = isUrdu
+            ? "آواز شناخت نہیں ہو سکی۔ دوبارہ کوشش کریں یا اپنا سوال ٹائپ کریں۔"
+            : "Could not capture speech right now. Click Speak to try again or type your question.";
         }
-      };
+        micStatusNote.classList.remove("hidden");
+      }
+    };
 
-      recognitionInstance.onresult = (event) => {
-        let transcript = "";
-        for (let i = 0; i < event.results.length; i += 1) {
-          transcript += event.results[i][0].transcript;
-        }
-        const trimmed = transcript.trim().slice(0, 280);
-        if (followupInput && trimmed) {
-          followupInput.value = trimmed;
-        }
-      };
-
-      recognitionInstance.onerror = (event) => {
+    instance.onend = () => {
+      // If user already captured text, stop cleanly so they can review & click Ask AI
+      if (followupInput && followupInput.value.trim()) {
+        wantListening = false;
         isRecognizing = false;
         updateMicUI();
         if (micStatusNote) {
-          const code = event && event.error ? event.error : "unknown";
-          if (code === "not-allowed" || code === "service-not-allowed") {
-            micStatusNote.textContent = isUrdu
-              ? "مائیکروفون کی اجازت نہیں ملی۔ براہِ کرم براؤزر میں مائیک کی اجازت دیں۔"
-              : "Microphone permission was denied. Please allow microphone access in your browser.";
-          } else if (code === "no-speech") {
-            micStatusNote.textContent = isUrdu
-              ? "کوئی آواز سنائی نہیں دی۔ دوبارہ کوشش کریں۔"
-              : "No speech detected. Click Speak to try again.";
-          } else {
-            micStatusNote.textContent = isUrdu
-              ? "آواز شناخت نہیں ہو سکی۔ آپ اپنا سوال ٹائپ بھی کر سکتے ہیں۔"
-              : "Could not capture speech right now. You can also type your question directly.";
-          }
-          micStatusNote.classList.remove("hidden");
-        }
-      };
-
-      recognitionInstance.onend = () => {
-        isRecognizing = false;
-        updateMicUI();
-        if (micStatusNote && followupInput && followupInput.value.trim()) {
           micStatusNote.textContent = isUrdu
             ? "آپ کا سوال درج ہو گیا ہے۔ تصدیق کے بعد 'Ask AI' دبائیں۔"
             : "Speech captured in the box above. Review it and click 'Ask AI'.";
           micStatusNote.classList.remove("hidden");
-          followupInput.focus();
         }
-      };
-
-      try {
-        recognitionInstance.start();
-      } catch {
-        isRecognizing = false;
-        updateMicUI();
+        followupInput.focus();
+        return;
       }
+
+      // If browser auto-closed recognition before user spoke (common with ur-PK), restart automatically while wantListening is true
+      if (wantListening) {
+        try {
+          instance.start();
+          return;
+        } catch {
+          /* fall through to stop */
+        }
+      }
+      isRecognizing = false;
+      updateMicUI();
+    };
+
+    try {
+      instance.start();
+    } catch {
+      wantListening = false;
+      isRecognizing = false;
+      updateMicUI();
+    }
+  }
+
+  if (micBtn && SpeechRecognitionCtor) {
+    micBtn.addEventListener("click", () => {
+      if (isRecognizing || wantListening) {
+        stopMicRecognition();
+        if (micStatusNote) {
+          if (followupInput && followupInput.value.trim()) {
+            micStatusNote.textContent =
+              state.selectedLanguage === "ur"
+                ? "آپ کا سوال درج ہو گیا ہے۔ تصدیق کے بعد 'Ask AI' دبائیں۔"
+                : "Speech captured in the box above. Review it and click 'Ask AI'.";
+            micStatusNote.classList.remove("hidden");
+          } else {
+            micStatusNote.classList.add("hidden");
+          }
+        }
+        return;
+      }
+      startMicRecognition();
     });
   }
 
@@ -814,7 +935,28 @@
           followupSourceNote.textContent = `Source: ${payload.source.title}`;
         }
 
+        lastFollowupPayload = payload;
         followupResult.classList.remove("hidden");
+
+        // Automatically speak the Direct AI answer aloud when browser speechSynthesis is available
+        if ("speechSynthesis" in window && payload.answer) {
+          speakTextAloud(
+            payload.answer,
+            payload.language,
+            () => {
+              if (followupStopBtn) followupStopBtn.classList.remove("hidden");
+              if (followupListenLabel) {
+                followupListenLabel.textContent = isUrdu ? "بول رہا ہے..." : "Playing...";
+              }
+            },
+            () => {
+              if (followupStopBtn) followupStopBtn.classList.add("hidden");
+              if (followupListenLabel) {
+                followupListenLabel.textContent = isUrdu ? "سنیں (Listen)" : "Listen";
+              }
+            }
+          );
+        }
       } catch {
         if (requestId !== state.activeFollowupRequestId) {
           return;

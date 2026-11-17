@@ -934,6 +934,13 @@ body {
   font-weight: 600;
 }
 
+.followup-audio-group {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
 .mic-btn {
   display: inline-flex;
   align-items: center;
