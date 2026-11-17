@@ -18,6 +18,7 @@
     isLoading: false,
     activeRequestId: 0,
     currentResult: null,
+    activeFollowupRequestId: 0,
   };
 
   // DOM References
@@ -108,9 +109,9 @@
     }
 
     const matchingVoice = getMatchingVoice(langCode);
-    if (langCode === "ur" && !matchingVoice) {
+    if (!matchingVoice) {
       listenBtn.disabled = true;
-      speechStatusNote.textContent = "Urdu voice is not installed on this device.";
+      speechStatusNote.textContent = `${langCode === "ur" ? "Urdu" : "English"} voice is not installed on this device.`;
       speechStatusNote.classList.remove("hidden");
     } else {
       listenBtn.disabled = false;
@@ -120,6 +121,8 @@
   }
 
   function clearStaleResults() {
+    ++state.activeRequestId;
+    setLoadingState(false);
     stopSpeech();
     state.currentResult = null;
     resultContainer.classList.add("hidden");
@@ -225,6 +228,8 @@
   }
 
   function resetFollowupUI() {
+    ++state.activeFollowupRequestId;
+    followupSubmitBtn.disabled = false;
     if (followupInput) {
       followupInput.value = "";
     }
@@ -317,6 +322,9 @@
         payload = null;
       }
 
+      if (requestId !== state.activeRequestId) {
+        return;
+      }
       setLoadingState(false);
 
       if (!response.ok || !payload || payload.error) {
@@ -445,7 +453,7 @@
 
       const langCode = state.currentResult.language;
       const voice = getMatchingVoice(langCode);
-      if (langCode === "ur" && !voice) {
+      if (!voice) {
         updateSpeechAvailability(langCode);
         return;
       }
@@ -498,6 +506,7 @@
         return;
       }
 
+      const requestId = ++state.activeFollowupRequestId;
       followupError.classList.add("hidden");
       followupResult.classList.add("hidden");
       followupLoading.classList.remove("hidden");
@@ -515,6 +524,9 @@
         });
 
         const payload = await response.json();
+        if (requestId !== state.activeFollowupRequestId) {
+          return;
+        }
         followupLoading.classList.add("hidden");
         followupSubmitBtn.disabled = false;
 
@@ -546,6 +558,9 @@
 
         followupResult.classList.remove("hidden");
       } catch {
+        if (requestId !== state.activeFollowupRequestId) {
+          return;
+        }
         followupLoading.classList.add("hidden");
         followupSubmitBtn.disabled = false;
         followupError.textContent =
