@@ -12,15 +12,13 @@ import os
 from pathlib import Path
 from typing import Any
 
+import click
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 
 import ai_service
 from ai_service import AIServiceError, SUPPORTED_LANGUAGES
 
-
-# Load private local .env if present (never committed or logged)
-load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
 TOPICS_FILE = BASE_DIR / "content" / "topics.json"
@@ -86,10 +84,22 @@ def summarize_topic_for_client(topic: dict[str, Any]) -> dict[str, Any]:
 
 def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     """Application factory for SehatSaathi AI."""
+    # Anchor configuration to the checkout, including BOM-prefixed Windows files.
+    # Exported variables take precedence; tests can disable dotenv entirely.
+    load_dotenv(BASE_DIR / ".env", encoding="utf-8-sig", override=False)
     app = Flask(__name__)
     app.config["JSON_AS_ASCII"] = False
     if test_config:
         app.config.update(test_config)
+
+    @app.cli.command("list-gemini-models")
+    def list_gemini_models():
+        """List current generateContent model IDs from the official Gemini API."""
+        try:
+            for name in ai_service.list_generation_models():
+                click.echo(name)
+        except AIServiceError as exc:
+            raise click.ClickException(f"{exc.code}: {exc.message}") from None
 
     def _error_response(code: str, message: str, status: int):
         return jsonify({"error": {"code": code, "message": message}, "live_ai": False}), status

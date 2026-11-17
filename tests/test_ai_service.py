@@ -5,6 +5,7 @@ Mocks are used strictly inside unit tests and never in production routes.
 
 import json
 import pytest
+from types import SimpleNamespace
 
 import ai_service
 from ai_service import (
@@ -17,6 +18,11 @@ from ai_service import (
 from app import get_topic_by_id
 
 
+@pytest.fixture(autouse=True)
+def configured_model(monkeypatch):
+    monkeypatch.setenv("GEMINI_MODEL", "test-text-model")
+
+
 class _FakeResponse:
     def __init__(self, text: str):
         self.text = text
@@ -26,6 +32,9 @@ class _FakeModels:
     def __init__(self, response_text: str | None = None, exc: Exception | None = None):
         self._text = response_text
         self._exc = exc
+
+    def get(self, **kwargs):
+        return SimpleNamespace(supported_actions=["generateContent"])
 
     def generate_content(self, **kwargs):
         if self._exc:
