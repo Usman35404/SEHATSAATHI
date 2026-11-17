@@ -1087,16 +1087,21 @@
         if (payload.boundary_triggered) {
           followupBadge.classList.add("badge--warning");
           followupBadge.textContent = "Safety Scope Boundary (Educational Tool Only)";
+          if (followupSourceNote) {
+            followupSourceNote.textContent = "Scope: General Health Education Only";
+          }
         } else if (payload.supported_by_source) {
           followupBadge.classList.add("badge--live");
-          followupBadge.textContent = "Verified Live AI (Grounded in CDC Facts)";
+          followupBadge.textContent = "Verified Live AI (Grounded in Curated CDC Facts)";
+          if (followupSourceNote && payload.source && payload.source.title) {
+            followupSourceNote.textContent = `Source: ${payload.source.title}`;
+          }
         } else {
-          followupBadge.classList.add("badge--neutral");
-          followupBadge.textContent = "Outside Current Topic Facts";
-        }
-
-        if (followupSourceNote && payload.source && payload.source.title) {
-          followupSourceNote.textContent = `Source: ${payload.source.title}`;
+          followupBadge.classList.add("badge--live");
+          followupBadge.textContent = "Live AI — General Health Literacy (Educational)";
+          if (followupSourceNote) {
+            followupSourceNote.textContent = "General Public-Health Education (Not Diagnosis)";
+          }
         }
 
         lastFollowupPayload = payload;

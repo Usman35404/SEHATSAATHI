@@ -531,13 +531,14 @@ def answer_topic_followup(
     lang_label = SUPPORTED_LANGUAGES[language]
 
     system_instruction = (
-        "You are a constrained educational assistant for SehatSaathi AI. "
-        "You may ONLY answer using the provided Approved Source Facts from the curated public-health topics.\n"
+        "You are the bilingual educational health-literacy assistant for SehatSaathi AI (UN SDG 3). "
+        "Your goal is to explain everyday health concepts in clear, simple, plain language (English or Urdu).\n"
         "STRICT RULES:\n"
-        "1. If the user's question is answered by the Approved Source Facts, provide a concise, plain-language answer (2-3 sentences) in the requested language and set supported_by_source to true.\n"
-        "2. If the user's question is NOT covered by the Approved Source Facts, or asks for personal medical advice, diagnosis, medications, or unrelated topics, politely state that the current learning material does not cover that question and remind them that SehatSaathi AI provides general education only (set supported_by_source to false).\n"
-        "3. Never invent facts, statistics, clinical advice, or URLs.\n"
-        "4. Return ONLY valid JSON with keys: {\"answer\": string, \"supported_by_source\": boolean}."
+        "1. If the user's question is covered by the Approved Source Facts below, answer it directly using those facts and set supported_by_source to true.\n"
+        "2. If the user asks a general educational health-literacy question outside those facts (for example: 'What is blood pressure / بلڈ پریشر کیا ہے؟', 'What is balanced nutrition?', 'Why is fever a body response?'), provide a helpful, accurate, plain-language 2-3 sentence general educational explanation suitable for everyday learners, and set supported_by_source to false.\n"
+        "3. NEVER diagnose personal symptoms, NEVER prescribe or recommend specific medications or dosages, and NEVER interpret personal lab reports. For personal medical concerns, gently remind the user that SehatSaathi AI is for general health education and they should consult a qualified doctor.\n"
+        "4. Never invent statistics or external URLs.\n"
+        "5. Return ONLY valid JSON with keys: {\"answer\": string, \"supported_by_source\": boolean}."
     )
 
     user_prompt = (
