@@ -1,0 +1,39 @@
+[
+  {
+    "id": "handwashing",
+    "title_en": "Proper Handwashing",
+    "title_ur": "ہاتھ دھونے کا درست طریقہ",
+    "summary_en": "Learn everyday hand hygiene steps, key times to wash hands, and how soap and water help stop the spread of germs.",
+    "summary_ur": "روزمرہ ہاتھ صاف رکھنے کے آسان مراحل، ہاتھ دھونے کے اہم اوقات اور صابن و پانی سے جراثیم سے بچاؤ کے بارے میں جانیں۔",
+    "source_title": "CDC — About Handwashing",
+    "source_url": "https://www.cdc.gov/clean-hands/about/",
+    "last_reviewed": "2026-11-17",
+    "scope_boundary": "General hand hygiene education only; does not diagnose infections or replace medical care.",
+    "facts": [
+      "Regular handwashing with soap and clean, running water is one of the most effective ways to remove germs, stay healthy, and help prevent spreading respiratory and diarrheal germs to others.",
+      "Germs from unwashed hands can enter the body when people touch their eyes, nose, or mouth without realizing it, and can also spread to food, drinks, and shared surfaces like doorknobs or toys.",
+      "Follow five simple handwashing steps every time: (1) Wet hands with clean, running water and apply soap; (2) Lather the backs of hands, between fingers, and under nails; (3) Scrub for at least 20 seconds; (4) Rinse well under clean, running water; (5) Dry with a clean towel or air dry.",
+      "Important times to wash hands include before, during, and after preparing food; before eating; before and after caring for someone who is sick or treating a cut; and after using the toilet, blowing your nose, coughing, sneezing, touching animals, or handling garbage.",
+      "If soap and clean running water are not available, use an alcohol-based hand sanitizer containing at least 60% alcohol, though sanitizer does not eliminate all types of germs and is less effective when hands are visibly dirty or greasy."
+    ]
+  },
+  {
+    "id": "sleep",
+    "title_en": "Healthy Sleep Basics",
+    "title_ur": "صحت مند نیند کے بنیادی اصول",
+    "summary_en": "Understand why quality sleep matters, recommended daily sleep hours by age group, and practical habits for better sleep hygiene.",
+    "summary_ur": "معیاری نیند کی اہمیت، عمر کے لحاظ سے نیند کے تجویز کردہ گھنٹے اور بہتر نیند کی صحت مند عادات کے بارے میں جانیں۔",
+    "source_title": "CDC — About Sleep",
+    "source_url": "https://www.cdc.gov/sleep/about/",
+    "last_reviewed": "2026-11-17",
+    "scope_boundary": "General sleep hygiene education only; does not diagnose or treat sleep disorders such as insomnia or sleep apnea.",
+    "facts": [
+      "Getting enough quality sleep every night supports attention, memory, mood, immune function, and everyday safety, while helping lower the risk of chronic health problems.",
+      "Recommended daily sleep varies by age: school-age children (6–12 years) need 9–12 hours, teens (13–17 years) need 8–10 hours, and adults (18 years and older) generally need 7 or more hours per night.",
+      "Healthy sleep involves both quantity (total hours) and quality (uninterrupted, refreshing sleep); repeatedly waking up at night or still feeling tired after sleeping can be signs of poor sleep quality.",
+      "Helpful daily sleep habits include going to bed and waking up at the same time every day (including weekends) and keeping the bedroom quiet, dark, relaxing, and at a comfortable cool temperature.",
+      "To sleep better, turn off electronic screens (phones, TVs, computers) at least 30 minutes before bedtime, avoid large meals and caffeine late in the day, and stay physically active during the day.",
+      "If someone consistently struggles with falling or staying asleep or feels overly sleepy during the day, they should speak with a qualified healthcare professional for personal guidance."
+    ]
+  }
+]

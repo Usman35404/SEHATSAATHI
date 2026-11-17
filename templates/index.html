@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="SehatSaathi AI — Understand trusted everyday public-health information in English and Urdu.">
+  <title>SehatSaathi AI — Understand Health Information in Your Own Language</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <!-- Safety Banner -->
+  <div class="safety-banner" role="region" aria-label="Educational scope disclaimer">
+    <div class="container safety-banner__inner">
+      <span class="safety-badge" aria-hidden="true">SDG 3 Education</span>
+      <p class="safety-banner__text">
+        <strong>General health education — not diagnosis or treatment.</strong>
+        SehatSaathi AI explains vetted public-health facts in plain language. For personal symptoms or medical care, consult a qualified healthcare professional.
+      </p>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="site-header">
+    <div class="container site-header__inner">
+      <div class="brand">
+        <div class="brand__logo" aria-hidden="true">
+          <svg viewBox="0 0 36 36" width="36" height="36" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="36" height="36" rx="10" fill="#0F766E"/>
+            <path d="M18 9C13.5 9 10 12.4 10 16.8C10 22.4 18 27.5 18 27.5C18 27.5 26 22.4 26 16.8C26 12.4 22.5 9 18 9Z" stroke="#CCFBF1" stroke-width="2.2" stroke-linejoin="round"/>
+            <path d="M18 13.5V19.5M15 16.5H21" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand__title">SehatSaathi AI <span class="brand__urdu" lang="ur" dir="rtl">صحت ساتھی</span></h1>
+          <p class="brand__tagline">Understand health information in your own language.</p>
+        </div>
+      </div>
+
+      <div class="header-controls" role="group" aria-label="Language and accessibility settings">
+        <!-- Language Toggle -->
+        <div class="lang-switch" role="radiogroup" aria-label="Select explanation language">
+          <button type="button" id="lang-en-btn" class="lang-switch__btn is-active" role="radio" aria-checked="true" data-lang="en">
+            English
+          </button>
+          <button type="button" id="lang-ur-btn" class="lang-switch__btn" role="radio" aria-checked="false" data-lang="ur" lang="ur">
+            اردو (Urdu)
+          </button>
+        </div>
+
+        <!-- Accessible Large Text Toggle -->
+        <button type="button" id="font-size-btn" class="utility-btn" aria-pressed="false" title="Toggle larger reading text">
+          <span aria-hidden="true">Aa+</span>
+          <span class="sr-only">Toggle large text size</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main id="main-content" class="container main-layout">
+    <!-- Left Column: Topic Selection & Action -->
+    <aside class="sidebar-panel" aria-labelledby="topics-heading">
+      <div class="panel-card">
+        <div class="panel-header">
+          <span class="step-pill">Step 1</span>
+          <h2 id="topics-heading" class="panel-title">Choose a Public-Health Topic</h2>
+        </div>
+        <p class="panel-subtitle">
+          Select an approved topic grounded in public-health guidance from the CDC.
+        </p>
+
+        <div id="topics-list" class="topics-grid" role="radiogroup" aria-labelledby="topics-heading">
+          {% for topic in initial_topics %}
+          <button
+            type="button"
+            class="topic-card {% if loop.first %}is-selected{% endif %}"
+            role="radio"
+            aria-checked="{{ 'true' if loop.first else 'false' }}"
+            data-topic-id="{{ topic.id }}"
+            data-title-en="{{ topic.title_en }}"
+            data-title-ur="{{ topic.title_ur }}"
+            data-source-title="{{ topic.source_title }}"
+            data-source-url="{{ topic.source_url }}"
+          >
+            <div class="topic-card__icon" aria-hidden="true">
+              {% if topic.id == 'handwashing' %}
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M7 11V5a1.5 1.5 0 0 1 3 0v4m0 0V3.5a1.5 1.5 0 0 1 3 0V9m0 0V4.5a1.5 1.5 0 0 1 3 0V9m0 0V6.5a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-2a6 6 0 0 1-5.66-4L4.1 12.3a1.5 1.5 0 0 1 2.6-1.3L7 11Z"/>
+              </svg>
+              {% else %}
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+              </svg>
+              {% endif %}
+            </div>
+            <div class="topic-card__body">
+              <div class="topic-card__titles">
+                <span class="topic-card__title-en">{{ topic.title_en }}</span>
+                <span class="topic-card__title-ur" lang="ur" dir="rtl">{{ topic.title_ur }}</span>
+              </div>
+              <p class="topic-card__summary">{{ topic.summary_en }}</p>
+              <span class="topic-card__source-tag">Source: {{ topic.source_title }}</span>
+            </div>
+          </button>
+          {% endfor %}
+        </div>
+
+        <div class="action-box">
+          <div class="selection-summary" aria-live="polite">
+            <div>
+              <span class="selection-summary__label">Selected Topic:</span>
+              <strong id="selected-topic-label">
+                {% if initial_topics %}{{ initial_topics[0].title_en }}{% else %}Proper Handwashing{% endif %}
+              </strong>
+            </div>
+            <div>
+              <span class="selection-summary__label">Language:</span>
+              <strong id="selected-lang-label">English</strong>
+            </div>
+          </div>
+
+          <button type="button" id="explain-btn" class="primary-btn">
+            <span id="explain-btn-text">Explain with AI</span>
+            <span class="primary-btn__sub" lang="ur">اے آئی سے آسان وضاحت حاصل کریں</span>
+          </button>
+        </div>
+
+        <!-- How Grounding Works Info Box -->
+        <div class="grounding-note">
+          <h3 class="grounding-note__title">Why Source-Grounded AI?</h3>
+          <ul class="grounding-note__list">
+            <li>Uses only reviewed public-health facts from <strong>CDC</strong>.</li>
+            <li>Adapts explanation into plain <strong>English</strong> or <strong>Urdu (اردو)</strong>.</li>
+            <li>Generates an interactive comprehension check.</li>
+            <li>No patient data collected; no clinical diagnosis.</li>
+          </ul>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Right Column: Live AI Explanation, Audio, Quiz & Follow-up -->
+    <section class="content-panel" aria-live="polite" aria-atomic="false">
+      <!-- Initial Ready State -->
+      <div id="empty-state" class="state-card state-card--empty">
+        <div class="state-card__icon" aria-hidden="true">
+          <svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="#0F766E" stroke-width="2.2">
+            <circle cx="24" cy="24" r="18" fill="#F0FDFA"/>
+            <path d="M18 22h12M18 28h8" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <h2 class="state-card__title">Ready to Generate a Grounded Explanation</h2>
+        <p class="state-card__text">
+          Select <strong>Proper Handwashing</strong> or <strong>Healthy Sleep Basics</strong> on the left, choose <strong>English</strong> or <strong>اردو (Urdu)</strong>, and click <strong>Explain with AI</strong> to generate a live, source-grounded explanation and comprehension quiz.
+        </p>
+        <p class="state-card__note" lang="ur" dir="rtl">
+          اپنی پسند کا موضوع اور زبان (انگریزی یا اردو) منتخب کریں اور "Explain with AI" بٹن دبائیں۔
+        </p>
+      </div>
+
+      <!-- Loading State -->
+      <div id="loading-state" class="state-card state-card--loading hidden" role="status" aria-live="assertive">
+        <div class="spinner" aria-hidden="true"></div>
+        <h2 class="state-card__title" id="loading-title">Generating live AI explanation...</h2>
+        <p class="state-card__text">
+          Grounding response strictly in curated public-health facts and validating comprehension quiz structure.
+        </p>
+      </div>
+
+      <!-- Error State -->
+      <div id="error-state" class="state-card state-card--error hidden" role="alert">
+        <div class="error-banner__header">
+          <span class="error-badge">Live AI Notice</span>
+          <h2 id="error-title" class="state-card__title">Live AI couldn't respond right now</h2>
+        </div>
+        <p id="error-message" class="state-card__text">
+          The live AI service is temporarily unavailable or unconfigured. We never substitute prewritten text as fake AI output.
+        </p>
+        <div class="error-actions">
+          <button type="button" id="retry-btn" class="secondary-btn">Try Again</button>
+        </div>
+      </div>
+
+      <!-- Live AI Result Container -->
+      <article id="result-container" class="result-wrapper hidden">
+        <!-- Explanation Card -->
+        <div class="result-card">
+          <div class="result-card__top">
+            <div class="badges-row">
+              <span id="live-ai-badge" class="badge badge--live">
+                <span class="pulse-dot" aria-hidden="true"></span>
+                Verified Live Gemini AI
+              </span>
+              <span id="result-lang-badge" class="badge badge--neutral">English</span>
+            </div>
+
+            <!-- Optional Browser Read-Aloud Controls -->
+            <div id="speech-controls" class="speech-controls">
+              <button type="button" id="listen-btn" class="audio-btn" aria-label="Listen to explanation">
+                <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor" aria-hidden="true">
+                  <path d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z"/>
+                </svg>
+                <span id="listen-btn-label">Listen</span>
+              </button>
+              <button type="button" id="stop-audio-btn" class="audio-btn audio-btn--stop hidden" aria-label="Stop audio playback">
+                Stop
+              </button>
+              <span id="speech-status-note" class="speech-status-note hidden"></span>
+            </div>
+          </div>
+
+          <!-- Localized Content Block (switches lang & dir dynamically) -->
+          <div id="localized-explanation-region" class="localized-region" lang="en" dir="ltr">
+            <h2 id="result-topic-heading" class="result-heading"></h2>
+            <p id="result-explanation" class="result-explanation"></p>
+
+            <div class="key-points-box">
+              <h3 id="key-points-heading" class="key-points-heading">Key Takeaways</h3>
+              <ul id="result-key-points" class="key-points-list"></ul>
+            </div>
+          </div>
+
+          <!-- Trusted Source Attribution (Always LTR for URL clarity) -->
+          <div class="source-attribution" dir="ltr" lang="en">
+            <div class="source-attribution__label">
+              <strong>Curated Grounding Source (Server-Verified):</strong>
+              <span id="source-title-text"></span>
+            </div>
+            <a id="source-url-link" href="#" target="_blank" rel="noopener noreferrer" class="source-link"></a>
+          </div>
+        </div>
+
+        <!-- Comprehension Quiz Card -->
+        <div class="result-card quiz-card" aria-labelledby="quiz-section-title">
+          <div class="panel-header">
+            <span class="step-pill">Step 2</span>
+            <h3 id="quiz-section-title" class="panel-title">Quick Comprehension Check</h3>
+          </div>
+
+          <div id="localized-quiz-region" class="localized-region" lang="en" dir="ltr">
+            <p id="quiz-question-text" class="quiz-question"></p>
+            <form id="quiz-form" class="quiz-form" novalidate>
+              <fieldset class="quiz-fieldset">
+                <legend class="sr-only">Choose the best answer</legend>
+                <div id="quiz-options-list" class="quiz-options"></div>
+              </fieldset>
+              <div class="quiz-actions" dir="ltr">
+                <button type="submit" id="submit-quiz-btn" class="secondary-btn" disabled>
+                  Check Answer
+                </button>
+              </div>
+            </form>
+            <div id="quiz-feedback-box" class="quiz-feedback hidden" role="status" aria-live="polite">
+              <strong id="quiz-feedback-status" class="quiz-feedback__status"></strong>
+              <p id="quiz-feedback-text" class="quiz-feedback__text"></p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Constrained Topic Follow-Up Card -->
+        <div class="result-card followup-card" aria-labelledby="followup-title">
+          <div class="panel-header">
+            <span class="step-pill">Optional</span>
+            <h3 id="followup-title" class="panel-title">Ask a Question About This Topic</h3>
+          </div>
+          <p class="panel-subtitle">
+            Questions are answered strictly from the selected topic's approved CDC facts. Personal symptoms, diagnoses, or prescriptions are not supported.
+          </p>
+
+          <form id="followup-form" class="followup-form" novalidate>
+            <label for="followup-input" class="sr-only">Ask a short educational question about this topic</label>
+            <div class="followup-input-row">
+              <input
+                type="text"
+                id="followup-input"
+                class="followup-input"
+                maxlength="280"
+                placeholder="e.g., How many seconds should I scrub my hands with soap?"
+                autocomplete="off"
+              >
+              <button type="submit" id="followup-submit-btn" class="secondary-btn">
+                Ask AI
+              </button>
+            </div>
+          </form>
+
+          <div id="followup-loading" class="followup-status hidden" role="status">
+            Checking approved topic facts with live AI...
+          </div>
+
+          <div id="followup-error" class="followup-error hidden" role="alert"></div>
+
+          <div id="followup-result" class="followup-result hidden" role="status" aria-live="polite">
+            <div class="followup-result__meta" dir="ltr">
+              <span id="followup-badge" class="badge badge--neutral">Source-Grounded Answer</span>
+            </div>
+            <p id="followup-answer-text" class="followup-result__text"></p>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="container site-footer__inner">
+      <div>
+        <strong>SehatSaathi AI</strong> — Built for the STCS AI Hackathon &amp; Startup Pitch (UN SDG 3: Good Health &amp; Well-Being).
+      </div>
+      <div class="site-footer__links">
+        <span>Public Sources: <a href="https://www.cdc.gov/clean-hands/about/" target="_blank" rel="noopener noreferrer">CDC Handwashing</a> &bull; <a href="https://www.cdc.gov/sleep/about/" target="_blank" rel="noopener noreferrer">CDC Sleep</a></span>
+        <span>Privacy: No accounts or patient records stored.</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+</body>
+</html>
