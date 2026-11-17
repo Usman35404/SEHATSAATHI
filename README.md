@@ -131,6 +131,59 @@ All educational explanations are grounded exclusively in concise, paraphrased pu
 
 ---
 
+### Linux / cloud development and browser checks
+
+```bash
+cd /workspace/SEHATSAATHI  # or your local checkout
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pytest -v
+.venv/bin/python app.py
+```
+
+The default port is 5000. If it is occupied, use `PORT=5001 .venv/bin/python app.py`.
+For cloud access, Flask's CLI supports binding all interfaces without changing source:
+`.venv/bin/python -m flask --app app run --host 0.0.0.0 --port 5000 --no-debugger --no-reload`.
+
+Optional Chromium integration tests exercise the real Flask routes, Gemini response
+validation, and frontend Explain → Listen → Quiz flow. Only the Gemini client and
+browser speech engine are mocked; these tests do not verify audible device output
+or live Gemini access. Automated tests disable dotenv loading to avoid reading
+local credential files.
+
+```bash
+.venv/bin/python -m pip install -r requirements-dev.txt
+.venv/bin/python -m playwright install chromium
+.venv/bin/python -m pytest -v
+```
+
+With an existing system Chromium, skip the browser download and run
+`CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium .venv/bin/python -m pytest -v`.
+Without Playwright installed, the browser module is skipped; the original unit
+and route tests still run. Browser-download network policy must allow the hosts
+reported by Playwright, or use an installed Chromium.
+
+### Live API verification and common failures
+
+- Configure `GEMINI_API_KEY` privately in environment settings or a git-ignored
+  local `.env`; never commit or share the value. Restart the app after changing it.
+- Allow HTTPS access to `generativelanguage.googleapis.com`. The default model is
+  `gemini-2.5-flash`; set `GEMINI_MODEL` only to a model available to your account.
+- `/api/health` returning `ai_configured: true` indicates configuration presence,
+  not successful authentication, model access, or quota availability.
+- Select a topic and English, click **Explain**, and verify an explanation, three
+  takeaways, a CDC source, and a three-option quiz appear. Repeat in Urdu. Verify
+  `/api/explain` returns HTTP 200 and `live_ai: true`. A 503 `AI_NOT_CONFIGURED`
+  means the key is absent or still a placeholder; `AI_UNAVAILABLE` requires
+  checking provider access, network policy, model availability, and quota.
+- Click **Listen** and check actual audio on your device; it requires a matching
+  installed English or Urdu voice. Missing voices disable Listen without blocking
+  the quiz. Select an answer and submit to verify feedback.
+- Changing topic or language during a request should clear the old result and
+  allow a new request immediately. Delayed replies must not restore old content.
+
+---
+
 ## 6. Safety, Privacy & Clinical Boundaries
 
 - **Education Only:** SehatSaathi AI does not diagnose diseases, interpret lab results/scans, or recommend medications or dosages.
