@@ -73,7 +73,7 @@ Gemini AI Service Layer (ai_service.py)
 
 ### Technology Stack
 - **Backend:** Python 3, Flask (`3.1.3`), `python-dotenv` (`1.2.4`)
-- **AI SDK:** Official Google Gen AI Python SDK (`google-genai==3.4.0`), default model `gemini-2.5-flash` (configurable via `GEMINI_MODEL`)
+- **AI SDK:** Official Google Gen AI Python SDK (`google-genai==3.4.0`), model selected explicitly through `GEMINI_MODEL` and checked against the official Models API
 - **Frontend:** Semantic Jinja2 HTML5, accessible responsive CSS3, vanilla JavaScript (zero frontend framework bloat, `textContent`-only DOM rendering to prevent XSS)
 - **Testing:** `pytest` (`9.2.0`) with unit and route tests covering content integrity, AI schema validation, safety gates, and error states
 
@@ -113,10 +113,18 @@ All educational explanations are grounded exclusively in concise, paraphrased pu
    Copy `.env.example` to `.env` (which is git-ignored) and set your real API key privately:
    ```dotenv
    GEMINI_API_KEY=your_actual_gemini_api_key_here
-   GEMINI_MODEL=gemini-2.5-flash
+   GEMINI_MODEL=replace_with_a_model_returned_by_list_gemini_models
    FLASK_DEBUG=false
    ```
    *Never commit `.env` or share your raw API key.*
+
+   Discover available model IDs using the official Gemini API (requires the key,
+   but does not require `GEMINI_MODEL` to be set):
+   ```powershell
+   .\.venv\Scripts\python.exe -m flask --app app list-gemini-models
+   ```
+   Set `GEMINI_MODEL` to an exact returned ID for a text-generation model supporting
+   JSON output. There is no automatic fallback to an assumed model ID.
 
 3. **Run the automated test suite:**
    ```powershell
@@ -167,20 +175,55 @@ reported by Playwright, or use an installed Chromium.
 
 - Configure `GEMINI_API_KEY` privately in environment settings or a git-ignored
   local `.env`; never commit or share the value. Restart the app after changing it.
-- Allow HTTPS access to `generativelanguage.googleapis.com`. The default model is
-  `gemini-2.5-flash`; set `GEMINI_MODEL` only to a model available to your account.
+- Allow HTTPS access to `generativelanguage.googleapis.com`. With the key configured,
+  run `.venv/bin/python -m flask --app app list-gemini-models`. This uses Google's
+  paginated Models API and prints only IDs supporting `generateContent`. Select
+  a text-generation model supporting JSON output, save its exact ID as
+  `GEMINI_MODEL`, and restart. Each generation checks current model metadata;
+  no model ID or continued availability is assumed.
 - `/api/health` returning `ai_configured: true` indicates configuration presence,
   not successful authentication, model access, or quota availability.
 - Select a topic and English, click **Explain**, and verify an explanation, three
   takeaways, a CDC source, and a three-option quiz appear. Repeat in Urdu. Verify
   `/api/explain` returns HTTP 200 and `live_ai: true`. A 503 `AI_NOT_CONFIGURED`
-  means the key is absent or still a placeholder; `AI_UNAVAILABLE` requires
-  checking provider access, network policy, model availability, and quota.
+  means the key is absent or still a placeholder. Other errors now distinguish
+  configuration, authentication, permissions, model availability, and quota;
+  see the table below.
 - Click **Listen** and check actual audio on your device; it requires a matching
   installed English or Urdu voice. Missing voices disable Listen without blocking
   the quiz. Select an answer and submit to verify feedback.
 - Changing topic or language during a request should clear the old result and
   allow a new request immediately. Delayed replies must not restore old content.
+
+Configuration is loaded from the repository's `.env`, including UTF-8 files with
+Windows BOMs. Exported environment variables take precedence over `.env`, even
+if they contain stale values. If you intend to use only `.env`, remove stale
+exported `GEMINI_API_KEY` / `GEMINI_MODEL` bindings without printing them, then
+restart. The app explicitly uses the Gemini Developer API even if
+`GOOGLE_GENAI_USE_VERTEXAI=true` is inherited.
+
+All provider failures keep `live_ai: false`. Their public messages are fixed
+instructions and never include provider exception text, request URLs, or keys.
+The HTTP status remains 503 for provider/configuration failures; malformed AI
+output remains 502.
+
+| Error code | Action |
+| --- | --- |
+| `AI_NOT_CONFIGURED` | Set the private API key and restart. |
+| `AI_MODEL_NOT_CONFIGURED` | Run model discovery and set `GEMINI_MODEL`. |
+| `AI_AUTH_FAILED` | Check or replace the rejected/expired key privately. |
+| `AI_ACCESS_DENIED` | Check API enablement, key restrictions, permissions, and region. |
+| `AI_MODEL_UNAVAILABLE` | Discover current IDs and replace the unavailable selection. |
+| `AI_MODEL_UNSUPPORTED` | Choose a model supporting `generateContent`. |
+| `AI_RATE_LIMITED` | Check provider quota/billing and wait before retrying. |
+| `AI_REQUEST_REJECTED` | Check model support for JSON and generation settings. |
+| `AI_UNAVAILABLE` | Check connectivity or temporary provider failures. |
+
+Official references: [Models API](https://ai.google.dev/api/models),
+[Google Gen AI SDK model listing](https://github.com/googleapis/python-genai#list-base-models),
+and [API troubleshooting](https://ai.google.dev/gemini-api/docs/troubleshooting).
+Google's [ModelService definition](https://github.com/googleapis/googleapis/blob/master/google/ai/generativelanguage/v1beta/model_service.proto)
+specifies that model names should match those returned by `ListModels`.
 
 ---
 

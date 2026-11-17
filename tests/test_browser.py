@@ -15,6 +15,7 @@ from app import create_app
 
 @pytest.fixture
 def site(monkeypatch):
+    monkeypatch.setenv("GEMINI_MODEL", "test-text-model")
     entered, release = threading.Event(), threading.Event()
     control = {'delay': False}
 
@@ -34,7 +35,8 @@ def site(monkeypatch):
         return SimpleNamespace(text=json.dumps(data))
 
     monkeypatch.setattr(ai_service, '_get_genai_client', lambda: SimpleNamespace(
-        models=SimpleNamespace(generate_content=generate_content)))
+        models=SimpleNamespace(generate_content=generate_content,
+                               get=lambda **kw: SimpleNamespace(supported_actions=["generateContent"]))))
     server = make_server('127.0.0.1', 0, create_app(), threaded=True)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

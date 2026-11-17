@@ -14,10 +14,9 @@ import re
 from typing import Any
 
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 
 
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 SUPPORTED_LANGUAGES = {"en": "English", "ur": "Urdu (اردو)"}
 MAX_QUESTION_LENGTH = 280
 
@@ -57,16 +56,22 @@ _PII_PATTERNS = re.compile(
 def is_ai_configured() -> bool:
     """Return True if a plausible GEMINI_API_KEY is present in the environment."""
     raw_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    if not raw_key or raw_key.startswith("replace_with_"):
+    placeholder = raw_key.lower()
+    if (not raw_key or placeholder.startswith(("replace_with_", "your_", "<"))
+            or any(char.isspace() for char in raw_key)):
         return False
     return True
 
 
 def get_configured_model_name() -> str:
-    """Return the configured Gemini model ID or a sensible default."""
+    """Require an explicit model ID discovered for the configured account."""
     raw_model = os.environ.get("GEMINI_MODEL", "").strip()
-    if not raw_model or raw_model.startswith("replace_with_"):
-        return DEFAULT_GEMINI_MODEL
+    if not raw_model or raw_model.lower().startswith("replace_with_"):
+        raise AIServiceError(
+            "AI_MODEL_NOT_CONFIGURED",
+            "Set GEMINI_MODEL to a generateContent model returned by "
+            "'flask --app app list-gemini-models', then restart the server.",
+        )
     return raw_model
 
 
@@ -126,12 +131,56 @@ def _get_genai_client() -> genai.Client:
             code="AI_NOT_CONFIGURED",
             message=(
                 "Live AI is not configured on this server yet. Please set a valid GEMINI_API_KEY "
-                "in your private local .env file and restart or retry."
+                "in your private local .env file or environment settings and restart the server."
             ),
             status_code=503,
         )
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    return genai.Client(api_key=api_key)
+    # This application uses the Gemini Developer API, not ambient Vertex settings.
+    try:
+        return genai.Client(api_key=api_key, vertexai=False)
+    except errors.APIError as exc:
+        raise _provider_error(exc) from None
+    except Exception:
+        raise AIServiceError("AI_UNAVAILABLE", "Could not initialize the Gemini client. Check server configuration.") from None
+
+
+def _provider_error(exc: errors.APIError) -> AIServiceError:
+    """Map only status/reason codes; never expose provider messages or URLs."""
+    details = exc.details if isinstance(exc.details, dict) else {}
+    error = details.get("error", details)
+    entries = error.get("details", []) if isinstance(error, dict) else []
+    reasons = {item.get("reason") for item in entries if isinstance(item, dict)} if isinstance(entries, list) else set()
+    if exc.code == 401 or reasons & {"API_KEY_INVALID", "API_KEY_EXPIRED"}:
+        return AIServiceError("AI_AUTH_FAILED", "Gemini rejected the API key. Check the private key configuration and restart the server.")
+    if exc.code == 403:
+        return AIServiceError("AI_ACCESS_DENIED", "Gemini access was denied. Check API enablement, key restrictions, account permissions, and region availability.")
+    if exc.code == 404:
+        return AIServiceError("AI_MODEL_UNAVAILABLE", "The configured Gemini model is unavailable. Run 'flask --app app list-gemini-models' and update GEMINI_MODEL.")
+    if exc.code == 429:
+        return AIServiceError("AI_RATE_LIMITED", "Gemini rate limit or quota was exceeded. Check account quota and billing before retrying.")
+    if exc.code == 400:
+        return AIServiceError("AI_REQUEST_REJECTED", "Gemini rejected the request. Check the selected model supports JSON output and the requested generation settings.")
+    return AIServiceError("AI_UNAVAILABLE", "Gemini is temporarily unavailable. Check connectivity and try again later.")
+
+
+def _verify_generation_model(client: genai.Client, model_name: str) -> None:
+    """Check current provider metadata instead of maintaining a model allowlist."""
+    model = client.models.get(model=model_name)
+    if "generateContent" not in (model.supported_actions or []):
+        raise AIServiceError("AI_MODEL_UNSUPPORTED", "GEMINI_MODEL does not support generateContent. Choose a model from 'flask --app app list-gemini-models'.")
+
+
+def list_generation_models() -> list[str]:
+    """Use the official paginated Models API without requiring a selected model."""
+    client = _get_genai_client()
+    try:
+        return [model.name for model in client.models.list()
+                if model.name and "generateContent" in (model.supported_actions or [])]
+    except errors.APIError as exc:
+        raise _provider_error(exc) from None
+    except Exception:
+        raise AIServiceError("AI_UNAVAILABLE", "Could not list Gemini models. Check connectivity and try again.") from None
 
 
 def _extract_json_object(raw_text: str) -> dict[str, Any]:
@@ -314,6 +363,7 @@ def generate_topic_explanation(topic: dict[str, Any], language: str) -> dict[str
     )
 
     try:
+        _verify_generation_model(client, model_name)
         response = client.models.generate_content(
             model=model_name,
             contents=user_prompt,
@@ -326,6 +376,8 @@ def generate_topic_explanation(topic: dict[str, Any], language: str) -> dict[str
         )
     except AIServiceError:
         raise
+    except errors.APIError as exc:
+        raise _provider_error(exc) from None
     except Exception as exc:
         raise AIServiceError(
             code="AI_UNAVAILABLE",
@@ -406,6 +458,7 @@ def answer_topic_followup(topic: dict[str, Any], language: str, question: str) -
     )
 
     try:
+        _verify_generation_model(client, model_name)
         response = client.models.generate_content(
             model=model_name,
             contents=user_prompt,
@@ -418,6 +471,8 @@ def answer_topic_followup(topic: dict[str, Any], language: str, question: str) -
         )
     except AIServiceError:
         raise
+    except errors.APIError as exc:
+        raise _provider_error(exc) from None
     except Exception as exc:
         raise AIServiceError(
             code="AI_UNAVAILABLE",
