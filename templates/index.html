@@ -142,6 +142,11 @@
 
     <!-- Right Column: Live AI Explanation, Audio, Quiz & Follow-up -->
     <section class="content-panel" aria-live="polite" aria-atomic="false">
+      <!-- Configuration warning (shown only if the server reports AI is not configured) -->
+      <div id="config-warning" class="config-warning hidden" role="alert">
+        <strong>Live AI is not configured on this computer.</strong>
+        Add your private <code>GEMINI_API_KEY</code> and <code>GEMINI_MODEL</code> to the local <code>.env</code> file, then restart the server.
+      </div>
       <!-- Initial Ready State -->
       <div id="empty-state" class="state-card state-card--empty">
         <div class="state-card__icon" aria-hidden="true">
@@ -166,6 +171,8 @@
         <p class="state-card__text">
           Grounding response strictly in curated public-health facts and validating comprehension quiz structure.
         </p>
+        <p class="loading-elapsed"><span id="loading-step-text">Reading approved CDC facts…</span> · <strong id="loading-elapsed">0s</strong></p>
+        <p class="loading-hint">Usually takes 3–10 seconds. Please keep this tab open.</p>
       </div>
 
       <!-- Error State -->
@@ -193,6 +200,7 @@
                 Verified Live Gemini AI
               </span>
               <span id="result-lang-badge" class="badge badge--neutral">English</span>
+              <span id="result-meta-badge" class="badge badge--neutral hidden"></span>
             </div>
 
             <!-- Optional Browser Read-Aloud Controls -->
@@ -267,6 +275,8 @@
           <p class="panel-subtitle">
             Questions are answered strictly from the selected topic's approved CDC facts. Personal symptoms, diagnoses, or prescriptions are not supported.
           </p>
+
+          <div id="followup-suggestions" class="suggestion-chips" aria-label="Suggested questions"></div>
 
           <form id="followup-form" class="followup-form" novalidate>
             <label for="followup-input" class="sr-only">Ask a short educational question about this topic</label>

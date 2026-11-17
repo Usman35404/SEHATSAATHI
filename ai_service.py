@@ -19,6 +19,25 @@ from google.genai import errors, types
 
 SUPPORTED_LANGUAGES = {"en": "English", "ur": "Urdu (اردو)"}
 MAX_QUESTION_LENGTH = 280
+DEFAULT_TIMEOUT_MS = 30000
+# Provider statuses where trying another *real* configured model is reasonable.
+_FALLBACK_STATUSES = {500, 502, 503, 504}
+
+
+def _request_timeout_ms() -> int:
+    """Per-request timeout so a slow provider never leaves the UI spinning forever."""
+    raw = os.environ.get("GEMINI_TIMEOUT_MS", "").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_TIMEOUT_MS
+    return min(max(value, 5000), 120000)
+
+
+def get_fallback_model_names() -> list[str]:
+    """Optional comma-separated GEMINI_FALLBACK_MODELS; empty by default (no fallback)."""
+    raw = os.environ.get("GEMINI_FALLBACK_MODELS", "")
+    return [name.strip() for name in raw.split(",") if name.strip()]
 
 
 class AIServiceError(Exception):
@@ -138,7 +157,11 @@ def _get_genai_client() -> genai.Client:
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
     # This application uses the Gemini Developer API, not ambient Vertex settings.
     try:
-        return genai.Client(api_key=api_key, vertexai=False)
+        return genai.Client(
+            api_key=api_key,
+            vertexai=False,
+            http_options=types.HttpOptions(timeout=_request_timeout_ms()),
+        )
     except errors.APIError as exc:
         raise _provider_error(exc) from None
     except Exception:
@@ -169,6 +192,39 @@ def _verify_generation_model(client: genai.Client, model_name: str) -> None:
     model = client.models.get(model=model_name)
     if "generateContent" not in (model.supported_actions or []):
         raise AIServiceError("AI_MODEL_UNSUPPORTED", "GEMINI_MODEL does not support generateContent. Choose a model from 'flask --app app list-gemini-models'.")
+
+
+def _live_generate(contents: str, config: types.GenerateContentConfig, unavailable_message: str) -> tuple[Any, str]:
+    """
+    Make a genuine live Gemini call with the configured model. If the provider is
+    overloaded or times out and GEMINI_FALLBACK_MODELS is set, try those real
+    models next. Returns (response, model_used). Never fabricates output.
+    """
+    client = _get_genai_client()
+    chain = [get_configured_model_name()]
+    for name in get_fallback_model_names():
+        if name not in chain:
+            chain.append(name)
+
+    for idx, model_name in enumerate(chain):
+        has_next = idx < len(chain) - 1
+        try:
+            _verify_generation_model(client, model_name)
+            response = client.models.generate_content(model=model_name, contents=contents, config=config)
+            return response, model_name
+        except AIServiceError:
+            raise
+        except errors.APIError as exc:
+            print(f"[ai_service] model={model_name} provider_status={exc.code}")
+            if has_next and exc.code in _FALLBACK_STATUSES:
+                continue
+            raise _provider_error(exc) from None
+        except Exception as exc:  # network timeout etc.; log only a safe category
+            print(f"[ai_service] model={model_name} failure={type(exc).__name__}")
+            if has_next:
+                continue
+            raise AIServiceError("AI_UNAVAILABLE", unavailable_message, 503) from None
+    raise AIServiceError("AI_UNAVAILABLE", unavailable_message, 503)
 
 
 def list_generation_models() -> list[str]:
@@ -231,6 +287,9 @@ def validate_explanation_payload(
         )
 
     key_points = raw_data.get("key_points")
+    if isinstance(key_points, list) and len(key_points) > 3:
+        # Keep the first three genuine model-generated points (no content is invented).
+        key_points = key_points[:3]
     if (
         not isinstance(key_points, list)
         or len(key_points) != 3
@@ -308,6 +367,29 @@ def validate_explanation_payload(
     }
 
 
+def _explanation_schema() -> types.Schema:
+    """Structured-output schema so Gemini returns exactly the shape we validate."""
+    text = types.Schema(type=types.Type.STRING)
+    return types.Schema(
+        type=types.Type.OBJECT,
+        required=["explanation", "key_points", "quiz"],
+        properties={
+            "explanation": text,
+            "key_points": types.Schema(type=types.Type.ARRAY, items=text, min_items=3, max_items=3),
+            "quiz": types.Schema(
+                type=types.Type.OBJECT,
+                required=["question", "options", "correct_index", "feedback"],
+                properties={
+                    "question": text,
+                    "options": types.Schema(type=types.Type.ARRAY, items=text, min_items=3, max_items=3),
+                    "correct_index": types.Schema(type=types.Type.INTEGER),
+                    "feedback": text,
+                },
+            ),
+        },
+    )
+
+
 def generate_topic_explanation(topic: dict[str, Any], language: str) -> dict[str, Any]:
     """
     Call Gemini live to produce a plain-language educational explanation and 3-option
@@ -319,9 +401,6 @@ def generate_topic_explanation(topic: dict[str, Any], language: str) -> dict[str
             message="Unsupported language requested. Choose 'en' (English) or 'ur' (Urdu).",
             status_code=400,
         )
-
-    client = _get_genai_client()
-    model_name = get_configured_model_name()
 
     facts_bulleted = "\n".join(f"- {fact}" for fact in topic.get("facts", []))
     lang_label = SUPPORTED_LANGUAGES[language]
@@ -342,7 +421,7 @@ def generate_topic_explanation(topic: dict[str, Any], language: str) -> dict[str
         "4. Return ONLY valid JSON matching the requested schema:\n"
         "{\n"
         '  "explanation": "2 to 4 clear, warm educational sentences summarizing the topic",\n'
-        '  "key_points": ["point 1", "point 2", "point 3"],\n'
+        '  "key_points": ["point 1", "point 2", "point 3"]  (EXACTLY three short points),\n'
         '  "quiz": {\n'
         '    "question": "one comprehension question testing understanding of the explanation",\n'
         '    "options": ["option A", "option B", "option C"],\n'
@@ -363,21 +442,19 @@ def generate_topic_explanation(topic: dict[str, Any], language: str) -> dict[str
     )
 
     try:
-        _verify_generation_model(client, model_name)
-        response = client.models.generate_content(
-            model=model_name,
-            contents=user_prompt,
-            config=types.GenerateContentConfig(
+        response, model_used = _live_generate(
+            user_prompt,
+            types.GenerateContentConfig(
                 system_instruction=system_instruction,
                 response_mime_type="application/json",
+                response_schema=_explanation_schema(),
                 temperature=0.2,
-                max_output_tokens=900,
+                max_output_tokens=4096,
             ),
+            "Gemini is busy or didn't respond in time. Please press Try Again in a few seconds.",
         )
     except AIServiceError:
         raise
-    except errors.APIError as exc:
-        raise _provider_error(exc) from None
     except Exception as exc:
         raise AIServiceError(
             code="AI_UNAVAILABLE",
@@ -387,7 +464,9 @@ def generate_topic_explanation(topic: dict[str, Any], language: str) -> dict[str
 
     raw_text = getattr(response, "text", None)
     parsed = _extract_json_object(raw_text)
-    return validate_explanation_payload(parsed, topic=topic, language=language)
+    result = validate_explanation_payload(parsed, topic=topic, language=language)
+    result["model"] = model_used
+    return result
 
 
 def answer_topic_followup(topic: dict[str, Any], language: str, question: str) -> dict[str, Any]:
@@ -434,9 +513,6 @@ def answer_topic_followup(topic: dict[str, Any], language: str, question: str) -
             "live_ai": False,
         }
 
-    client = _get_genai_client()
-    model_name = get_configured_model_name()
-
     facts_bulleted = "\n".join(f"- {fact}" for fact in topic.get("facts", []))
     lang_label = SUPPORTED_LANGUAGES[language]
 
@@ -458,21 +534,18 @@ def answer_topic_followup(topic: dict[str, Any], language: str, question: str) -
     )
 
     try:
-        _verify_generation_model(client, model_name)
-        response = client.models.generate_content(
-            model=model_name,
-            contents=user_prompt,
-            config=types.GenerateContentConfig(
+        response, model_used = _live_generate(
+            user_prompt,
+            types.GenerateContentConfig(
                 system_instruction=system_instruction,
                 response_mime_type="application/json",
                 temperature=0.1,
-                max_output_tokens=450,
+                max_output_tokens=2048,
             ),
+            "Gemini is busy or didn't respond in time. Please try your question again in a few seconds.",
         )
     except AIServiceError:
         raise
-    except errors.APIError as exc:
-        raise _provider_error(exc) from None
     except Exception as exc:
         raise AIServiceError(
             code="AI_UNAVAILABLE",
@@ -502,5 +575,6 @@ def answer_topic_followup(topic: dict[str, Any], language: str, question: str) -
             "title": topic["source_title"],
             "url": topic["source_url"],
         },
+        "model": model_used,
         "live_ai": True,
     }

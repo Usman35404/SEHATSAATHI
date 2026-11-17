@@ -75,6 +75,86 @@
   const followupBadge = document.getElementById("followup-badge");
   const followupAnswerText = document.getElementById("followup-answer-text");
 
+  // Usability helpers (loading progress, model badge, suggestions, config check)
+  const loadingElapsed = document.getElementById("loading-elapsed");
+  const loadingStepText = document.getElementById("loading-step-text");
+  const resultMetaBadge = document.getElementById("result-meta-badge");
+  const followupSuggestions = document.getElementById("followup-suggestions");
+  const configWarning = document.getElementById("config-warning");
+  let loadingTimer = null;
+  let requestStartedAt = 0;
+
+  const LOADING_STEPS = [
+    "Reading approved CDC facts…",
+    "Asking Gemini for a plain-language explanation…",
+    "Creating your comprehension question…",
+    "Checking the response format…",
+    "Gemini is busy — still waiting for a live answer…",
+  ];
+
+  const SUGGESTED_QUESTIONS = {
+    handwashing: {
+      en: ["How long should I scrub my hands?", "When should I wash my hands?", "Can I use hand sanitizer instead?"],
+      ur: ["ہاتھ کتنی دیر تک دھونے چاہئیں؟", "ہاتھ کب کب دھونے چاہئیں؟", "کیا سینیٹائزر استعمال کر سکتے ہیں؟"],
+    },
+    sleep: {
+      en: ["How many hours should a teenager sleep?", "How can I sleep better at night?", "Why is sleep important?"],
+      ur: ["نوجوانوں کو کتنے گھنٹے سونا چاہیے؟", "رات کو بہتر نیند کیسے لیں؟", "نیند کیوں ضروری ہے؟"],
+    },
+  };
+
+  function startLoadingTimer() {
+    requestStartedAt = Date.now();
+    if (loadingElapsed) loadingElapsed.textContent = "0s";
+    if (loadingStepText) loadingStepText.textContent = LOADING_STEPS[0];
+    clearInterval(loadingTimer);
+    loadingTimer = setInterval(() => {
+      const secs = Math.floor((Date.now() - requestStartedAt) / 1000);
+      if (loadingElapsed) loadingElapsed.textContent = `${secs}s`;
+      const stepIdx = secs < 2 ? 0 : secs < 5 ? 1 : secs < 8 ? 2 : secs < 12 ? 3 : 4;
+      if (loadingStepText) loadingStepText.textContent = LOADING_STEPS[stepIdx];
+    }, 500);
+  }
+
+  function stopLoadingTimer() {
+    clearInterval(loadingTimer);
+    loadingTimer = null;
+  }
+
+  function renderSuggestions(topicId, langCode) {
+    if (!followupSuggestions) return;
+    followupSuggestions.textContent = "";
+    const list = (SUGGESTED_QUESTIONS[topicId] || {})[langCode] || [];
+    followupSuggestions.setAttribute("dir", langCode === "ur" ? "rtl" : "ltr");
+    list.forEach((q) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "suggestion-chip";
+      chip.textContent = q;
+      if (langCode === "ur") chip.setAttribute("lang", "ur");
+      chip.addEventListener("click", () => {
+        followupInput.value = q;
+        if (typeof followupForm.requestSubmit === "function") {
+          followupForm.requestSubmit();
+        } else {
+          followupForm.dispatchEvent(new Event("submit", { cancelable: true }));
+        }
+      });
+      followupSuggestions.appendChild(chip);
+    });
+  }
+
+  async function checkAiConfiguration() {
+    if (!configWarning) return;
+    try {
+      const resp = await fetch("/api/health");
+      const data = await resp.json();
+      configWarning.classList.toggle("hidden", data && data.ai_configured === true);
+    } catch {
+      /* Server unreachable: the explain request will show its own error. */
+    }
+  }
+
   function stopSpeech() {
     if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
@@ -174,11 +254,13 @@
 
     if (loading) {
       stopSpeech();
+      startLoadingTimer();
       emptyState.classList.add("hidden");
       errorState.classList.add("hidden");
       resultContainer.classList.add("hidden");
       loadingState.classList.remove("hidden");
     } else {
+      stopLoadingTimer();
       loadingState.classList.add("hidden");
     }
   }
@@ -285,12 +367,25 @@
 
     renderQuiz(data.quiz, data.language);
     resetFollowupUI();
+    renderSuggestions(data.topic_id, data.language);
     updateSpeechAvailability(data.language);
+
+    if (resultMetaBadge) {
+      const secs = requestStartedAt ? ((Date.now() - requestStartedAt) / 1000).toFixed(1) : null;
+      const parts = [];
+      if (data.model) parts.push(String(data.model).replace(/^models\//, ""));
+      if (secs) parts.push(`${secs}s`);
+      resultMetaBadge.textContent = parts.join(" · ");
+      resultMetaBadge.classList.toggle("hidden", parts.length === 0);
+    }
 
     emptyState.classList.add("hidden");
     errorState.classList.add("hidden");
     loadingState.classList.add("hidden");
     resultContainer.classList.remove("hidden");
+    if (window.matchMedia && window.matchMedia("(max-width: 900px)").matches) {
+      resultContainer.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }
 
   async function requestExplanation() {
@@ -572,4 +667,5 @@
 
   // Initialize UI
   updateSelectionUI();
+  checkAiConfiguration();
 })();
