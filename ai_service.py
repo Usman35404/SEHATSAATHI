@@ -19,6 +19,8 @@ from google.genai import errors, types
 
 SUPPORTED_LANGUAGES = {"en": "English", "ur": "Urdu (اردو)"}
 MAX_QUESTION_LENGTH = 280
+MAX_AUDIO_BYTES = 2 * 1024 * 1024
+ALLOWED_AUDIO_MIMES = {"audio/webm", "audio/ogg", "audio/wav", "audio/mp4", "audio/mpeg"}
 DEFAULT_TIMEOUT_MS = 30000
 # Provider statuses where trying another *real* configured model is reasonable.
 _FALLBACK_STATUSES = {500, 502, 503, 504}
@@ -590,3 +592,74 @@ def answer_topic_followup(
         "model": model_used,
         "live_ai": True,
     }
+
+
+def transcribe_audio_question(audio_bytes: bytes, mime_type: str, language: str) -> dict[str, Any]:
+    """
+    Transcribe short spoken question audio in-memory using Gemini when the browser's
+    native SpeechRecognition service fails (e.g., 'network' error in Urdu mode).
+    Audio is never written to disk or logged.
+    """
+    if language not in SUPPORTED_LANGUAGES:
+        raise AIServiceError(
+            code="INVALID_LANGUAGE",
+            message="Unsupported language requested. Choose 'en' (English) or 'ur' (Urdu).",
+            status_code=400,
+        )
+    if not audio_bytes or len(audio_bytes) < 100:
+        raise AIServiceError(
+            code="INVALID_AUDIO",
+            message="No speech audio was captured. Please hold/click the microphone and speak clearly.",
+            status_code=400,
+        )
+    if len(audio_bytes) > MAX_AUDIO_BYTES:
+        raise AIServiceError(
+            code="AUDIO_TOO_LARGE",
+            message="Audio clip is too long. Please keep spoken questions under 15 seconds.",
+            status_code=400,
+        )
+
+    base_mime = (mime_type or "audio/webm").split(";")[0].strip().lower()
+    if base_mime not in ALLOWED_AUDIO_MIMES:
+        base_mime = "audio/webm"
+
+    lang_hint = (
+        "Transcribe the spoken audio into Urdu script (اردو). If the speaker used English words, you may keep or transliterate them naturally."
+        if language == "ur"
+        else "Transcribe the spoken audio into plain English."
+    )
+    prompt = (
+        f"{lang_hint} Return ONLY valid JSON with a single key {{\"transcript\": \"...\"}} "
+        "containing the exact spoken question (or empty string if only silence/noise)."
+    )
+
+    client = _get_genai_client()
+    model_name = get_configured_model_name()
+    try:
+        _verify_generation_model(client, model_name)
+        response = client.models.generate_content(
+            model=model_name,
+            contents=[
+                types.Part.from_bytes(data=audio_bytes, mime_type=base_mime),
+                prompt,
+            ],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.0,
+                max_output_tokens=256,
+            ),
+        )
+    except AIServiceError:
+        raise
+    except errors.APIError as exc:
+        raise _provider_error(exc) from None
+    except Exception as exc:
+        raise AIServiceError(
+            code="AI_UNAVAILABLE",
+            message="Could not transcribe audio right now. Please try again or type your question.",
+            status_code=503,
+        ) from exc
+
+    parsed = _extract_json_object(getattr(response, "text", None))
+    transcript = str(parsed.get("transcript", "")).strip()[:MAX_QUESTION_LENGTH]
+    return {"transcript": transcript, "language": language, "live_ai": True}

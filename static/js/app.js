@@ -83,10 +83,15 @@
   const micBtnLabel = document.getElementById("mic-btn-label");
   const micStatusNote = document.getElementById("mic-status-note");
 
-  // Web Speech API (Speech-to-Text) state
+  // Web Speech API / MediaRecorder state
   const SpeechRecognitionCtor =
     window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  const hasMediaRecorder =
+    Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
   let recognitionInstance = null;
+  let mediaRecorderInstance = null;
+  let mediaStreamInstance = null;
+  let audioChunks = [];
   let isRecognizing = false;
   let wantListening = false;
   let lastFollowupPayload = null;
@@ -704,13 +709,13 @@
   // Web Speech API: Speech-to-Text (Microphone Input — Option A: populate input for review)
   function updateMicUI() {
     if (!micBtn) return;
-    if (!SpeechRecognitionCtor) {
+    if (!SpeechRecognitionCtor && !hasMediaRecorder) {
       micBtn.disabled = true;
       micBtn.setAttribute("aria-pressed", "false");
       if (micBtnLabel) micBtnLabel.textContent = "Mic N/A";
       if (micStatusNote) {
         micStatusNote.textContent =
-          "Voice input is not supported in this browser (use Chrome or Edge for speech-to-text).";
+          "Voice input is not supported in this browser.";
         micStatusNote.classList.remove("hidden");
       }
       return;
@@ -722,14 +727,21 @@
     micBtn.setAttribute("aria-pressed", isRecognizing ? "true" : "false");
     if (micBtnLabel) {
       if (isRecognizing) {
-        micBtnLabel.textContent = isUrdu ? "سن رہا ہے..." : "Listening...";
+        micBtnLabel.textContent = isUrdu ? "روکیں (Stop)" : "Stop Mic";
       } else {
         micBtnLabel.textContent = isUrdu ? "بولیں (Mic)" : "Speak";
       }
     }
   }
 
-  function stopMicRecognition() {
+  function cleanupMediaStream() {
+    if (mediaStreamInstance) {
+      mediaStreamInstance.getTracks().forEach((track) => track.stop());
+      mediaStreamInstance = null;
+    }
+  }
+
+  function stopMicRecognition(shouldTranscribeRecorded = false) {
     wantListening = false;
     if (recognitionInstance) {
       recognitionInstance.onend = null;
@@ -740,23 +752,159 @@
       }
       recognitionInstance = null;
     }
+    if (mediaRecorderInstance && mediaRecorderInstance.state !== "inactive") {
+      mediaRecorderInstance._shouldTranscribe = shouldTranscribeRecorded;
+      try {
+        mediaRecorderInstance.stop();
+      } catch {
+        cleanupMediaStream();
+      }
+    } else {
+      cleanupMediaStream();
+    }
     isRecognizing = false;
     updateMicUI();
   }
 
+  async function startMediaRecorderFallback() {
+    const isUrdu = state.selectedLanguage === "ur";
+    const targetLanguage = state.selectedLanguage;
+    if (!hasMediaRecorder) {
+      if (micStatusNote) {
+        micStatusNote.textContent = isUrdu
+          ? "اس براؤزر میں وائس ریکارڈنگ دستیاب نہیں ہے۔"
+          : "Voice recording is not available in this browser.";
+        micStatusNote.classList.remove("hidden");
+      }
+      return;
+    }
+
+    try {
+      mediaStreamInstance = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      wantListening = false;
+      isRecognizing = false;
+      updateMicUI();
+      if (micStatusNote) {
+        micStatusNote.textContent = isUrdu
+          ? "مائیکروفون کی اجازت نہیں ملی یا مائیک موجود نہیں ہے۔"
+          : "Microphone access was denied or no microphone device was found.";
+        micStatusNote.classList.remove("hidden");
+      }
+      return;
+    }
+
+    audioChunks = [];
+    const mimeType = MediaRecorder.isTypeSupported("audio/webm")
+      ? "audio/webm"
+      : MediaRecorder.isTypeSupported("audio/ogg")
+      ? "audio/ogg"
+      : "";
+    const recorder = mimeType
+      ? new MediaRecorder(mediaStreamInstance, { mimeType })
+      : new MediaRecorder(mediaStreamInstance);
+    mediaRecorderInstance = recorder;
+    recorder._shouldTranscribe = true;
+
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) {
+        audioChunks.push(e.data);
+      }
+    };
+
+    recorder.onstop = async () => {
+      const shouldSend = recorder._shouldTranscribe;
+      cleanupMediaStream();
+      isRecognizing = false;
+      wantListening = false;
+      updateMicUI();
+
+      if (!shouldSend || audioChunks.length === 0) {
+        return;
+      }
+
+      const blob = new Blob(audioChunks, { type: recorder.mimeType || "audio/webm" });
+      if (blob.size < 200) {
+        return;
+      }
+
+      if (micStatusNote) {
+        micStatusNote.textContent = isUrdu
+          ? "آپ کی آواز کو اردو متن میں تبدیل کیا جا رہا ہے..."
+          : "Transcribing your spoken question with Gemini AI...";
+        micStatusNote.classList.remove("hidden");
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const dataUrl = String(reader.result || "");
+        const base64Audio = dataUrl.includes(",") ? dataUrl.split(",")[1] : "";
+        if (!base64Audio) return;
+
+        try {
+          const resp = await fetch("/api/transcribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              language: targetLanguage,
+              mime_type: blob.type || "audio/webm",
+              audio_base64: base64Audio,
+            }),
+          });
+          const data = await resp.json();
+          if (resp.ok && data && data.transcript) {
+            followupInput.value = data.transcript;
+            followupInput.focus();
+            if (micStatusNote) {
+              micStatusNote.textContent = isUrdu
+                ? "آپ کا سوال درج ہو گیا ہے۔ تصدیق کے بعد 'Ask AI' دبائیں۔"
+                : "Speech captured in the box above. Review it and click 'Ask AI'.";
+              micStatusNote.classList.remove("hidden");
+            }
+          } else if (micStatusNote) {
+            micStatusNote.textContent = isUrdu
+              ? "آواز واضح نہیں تھی۔ دوبارہ بولیں یا سوال ٹائپ کریں۔"
+              : "Could not hear clear speech. Click Speak to try again or type your question.";
+            micStatusNote.classList.remove("hidden");
+          }
+        } catch {
+          if (micStatusNote) {
+            micStatusNote.textContent = isUrdu
+              ? "آواز شناخت نہیں ہو سکی۔ براہِ کرم سوال ٹائپ کریں۔"
+              : "Could not transcribe audio right now. Please type your question.";
+            micStatusNote.classList.remove("hidden");
+          }
+        }
+      };
+      reader.readAsDataURL(blob);
+    };
+
+    wantListening = true;
+    isRecognizing = true;
+    updateMicUI();
+    if (micStatusNote) {
+      micStatusNote.textContent = isUrdu
+        ? "مائیکروفون فعال ہے (اردو) — اپنا سوال بولیں اور مکمل ہونے پر 'روکیں (Stop)' دبائیں..."
+        : "Recording voice — speak your question and click 'Stop Mic' when finished...";
+      micStatusNote.classList.remove("hidden");
+    }
+    recorder.start();
+  }
+
   function startMicRecognition(langOverride) {
-    if (!SpeechRecognitionCtor) return;
     stopSpeech();
+    if (!SpeechRecognitionCtor) {
+      startMediaRecorderFallback();
+      return;
+    }
 
     const isUrdu = state.selectedLanguage === "ur";
-    // Try 'ur-PK' first for Urdu, with automatic fallback to 'ur' or 'en-US' if browser rejects 'ur-PK'
     const targetLang = langOverride || (isUrdu ? "ur-PK" : "en-US");
     wantListening = true;
 
     const instance = new SpeechRecognitionCtor();
     recognitionInstance = instance;
     instance.lang = targetLang;
-    // Continuous false is more widely supported across locales (including ur-PK on Windows Chrome/Edge)
     instance.continuous = false;
     instance.interimResults = true;
     instance.maxAlternatives = 1;
@@ -785,19 +933,19 @@
 
     instance.onerror = (event) => {
       const code = event && event.error ? event.error : "unknown";
-      // If browser doesn't support 'ur-PK' locale tag directly, retry seamlessly with 'ur' then 'hi-IN' / 'en-US'
+      // When Chromium/Edge/Webview throws 'network' or 'language-not-supported' on SpeechRecognition,
+      // seamlessly switch to MediaRecorder + Gemini audio transcription so Urdu & English voice input always works!
       if (
-        (code === "language-not-supported" || code === "bad-grammar") &&
+        (code === "network" ||
+          code === "language-not-supported" ||
+          code === "service-not-allowed" ||
+          code === "bad-grammar") &&
+        hasMediaRecorder &&
         wantListening
       ) {
-        if (targetLang === "ur-PK") {
-          startMicRecognition("ur");
-          return;
-        }
-        if (targetLang === "ur") {
-          startMicRecognition("en-US");
-          return;
-        }
+        recognitionInstance = null;
+        startMediaRecorderFallback();
+        return;
       }
 
       if ((code === "no-speech" || code === "aborted") && wantListening) {
@@ -808,7 +956,7 @@
       isRecognizing = false;
       updateMicUI();
       if (micStatusNote) {
-        if (code === "not-allowed" || code === "service-not-allowed") {
+        if (code === "not-allowed") {
           micStatusNote.textContent = isUrdu
             ? "مائیکروفون کی اجازت نہیں ملی۔ براہِ کرم براؤزر ایڈریس بار میں مائیک کی اجازت دیں۔"
             : "Microphone permission was denied. Please allow microphone access in your browser address bar.";
@@ -816,10 +964,6 @@
           micStatusNote.textContent = isUrdu
             ? "مائیکروفون نہیں ملا۔ براہِ کرم چیک کریں کہ مائیک منسلک ہے۔"
             : "No microphone found. Please check that a microphone is connected.";
-        } else if (code === "network") {
-          micStatusNote.textContent = isUrdu
-            ? "براؤزر وائس سروس سے رابطہ نہیں ہو سکا (انٹرنیٹ یا کروم درکار ہے)۔"
-            : "Browser speech service network error (use Google Chrome with active internet).";
         } else {
           micStatusNote.textContent = isUrdu
             ? `مائیکروفون نوٹس (${code}): دوبارہ کوشش کریں یا سوال ٹائپ کریں۔`
@@ -830,6 +974,9 @@
     };
 
     instance.onend = () => {
+      if (mediaRecorderInstance && mediaRecorderInstance.state === "recording") {
+        return;
+      }
       if (followupInput && followupInput.value.trim()) {
         wantListening = false;
         isRecognizing = false;
@@ -844,7 +991,6 @@
         return;
       }
 
-      // If browser ended before speech was captured and user still wants listening, restart after a short 150ms delay
       if (wantListening) {
         setTimeout(() => {
           if (wantListening) {
@@ -860,27 +1006,20 @@
     try {
       instance.start();
     } catch {
-      wantListening = false;
-      isRecognizing = false;
-      updateMicUI();
+      if (hasMediaRecorder) {
+        startMediaRecorderFallback();
+      } else {
+        wantListening = false;
+        isRecognizing = false;
+        updateMicUI();
+      }
     }
   }
 
-  if (micBtn && SpeechRecognitionCtor) {
+  if (micBtn && (SpeechRecognitionCtor || hasMediaRecorder)) {
     micBtn.addEventListener("click", () => {
       if (isRecognizing || wantListening) {
-        stopMicRecognition();
-        if (micStatusNote) {
-          if (followupInput && followupInput.value.trim()) {
-            micStatusNote.textContent =
-              state.selectedLanguage === "ur"
-                ? "آپ کا سوال درج ہو گیا ہے۔ تصدیق کے بعد 'Ask AI' دبائیں۔"
-                : "Speech captured in the box above. Review it and click 'Ask AI'.";
-            micStatusNote.classList.remove("hidden");
-          } else {
-            micStatusNote.classList.add("hidden");
-          }
-        }
+        stopMicRecognition(true);
         return;
       }
       startMicRecognition();

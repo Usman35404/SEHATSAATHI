@@ -270,6 +270,43 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 503,
             )
 
+    @app.route("/api/transcribe", methods=["POST"])
+    def api_transcribe():
+        """In-memory speech-to-text fallback via Gemini when browser SpeechRecognition fails."""
+        import base64
+
+        if not request.is_json:
+            return _error_response("INVALID_JSON", "Request body must be valid JSON.", 400)
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return _error_response("INVALID_JSON", "Request body must be a JSON object.", 400)
+
+        language = str(payload.get("language", "en")).strip()
+        audio_b64 = payload.get("audio_base64", "")
+        mime_type = str(payload.get("mime_type", "audio/webm")).strip()
+
+        if language not in SUPPORTED_LANGUAGES:
+            return _error_response("INVALID_LANGUAGE", "Unsupported language.", 400)
+        if not isinstance(audio_b64, str) or not audio_b64.strip():
+            return _error_response("INVALID_AUDIO", "Missing audio data.", 400)
+
+        try:
+            audio_bytes = base64.b64decode(audio_b64, validate=False)
+        except Exception:
+            return _error_response("INVALID_AUDIO", "Invalid base64 audio data.", 400)
+
+        try:
+            result = ai_service.transcribe_audio_question(
+                audio_bytes=audio_bytes,
+                mime_type=mime_type,
+                language=language,
+            )
+            return jsonify(result), 200
+        except AIServiceError as exc:
+            return _error_response(exc.code, exc.message, exc.status_code)
+        except Exception:
+            return _error_response("AI_UNAVAILABLE", "Could not transcribe audio right now.", 503)
+
     return app
 
 
