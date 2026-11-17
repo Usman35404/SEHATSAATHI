@@ -21,11 +21,14 @@ __pycache__/
 .coverage
 htmlcov/
 
-# Logs & Local Artifacts
+# Logs, Local Artifacts & Databases
 *.log
 logs/
 tmp/
 temp/
+*.db
+*.sqlite
+*.sqlite3
 
 # IDE & OS Files
 .idea/
