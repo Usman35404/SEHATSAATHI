@@ -244,7 +244,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 400,
             )
 
-        topic = get_topic_by_id(topic_id)
+        catalog = load_topics_catalog()
+        topic = get_topic_by_id(topic_id, catalog=catalog)
         if topic is None:
             return _error_response(
                 "UNKNOWN_TOPIC",
@@ -257,6 +258,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
                 topic=topic,
                 language=language.strip(),
                 question=question,
+                catalog=catalog,
             )
             return jsonify(result), 200
         except AIServiceError as exc:

@@ -469,10 +469,15 @@ def generate_topic_explanation(topic: dict[str, Any], language: str) -> dict[str
     return result
 
 
-def answer_topic_followup(topic: dict[str, Any], language: str, question: str) -> dict[str, Any]:
+def answer_topic_followup(
+    topic: dict[str, Any],
+    language: str,
+    question: str,
+    catalog: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """
-    Answer a single constrained follow-up educational question strictly grounded
-    in the selected topic's curated facts.
+    Answer a single constrained educational question strictly grounded
+    in the selected topic's curated facts (or across the curated catalog if provided).
     """
     if language not in SUPPORTED_LANGUAGES:
         raise AIServiceError(
@@ -513,21 +518,28 @@ def answer_topic_followup(topic: dict[str, Any], language: str, question: str) -
             "live_ai": False,
         }
 
-    facts_bulleted = "\n".join(f"- {fact}" for fact in topic.get("facts", []))
+    topics_for_context = catalog if catalog else [topic]
+    context_blocks = []
+    for item in topics_for_context:
+        item_facts = "\n".join(f"  - {fact}" for fact in item.get("facts", []))
+        context_blocks.append(
+            f"[Topic ID: {item['id']} | {item['title_en']} ({item['title_ur']}) | Source: {item['source_title']}]\n{item_facts}"
+        )
+    facts_bulleted = "\n\n".join(context_blocks)
     lang_label = SUPPORTED_LANGUAGES[language]
 
     system_instruction = (
         "You are a constrained educational assistant for SehatSaathi AI. "
-        "You may ONLY answer using the provided Approved Source Facts for the selected topic.\n"
+        "You may ONLY answer using the provided Approved Source Facts from the curated public-health topics.\n"
         "STRICT RULES:\n"
         "1. If the user's question is answered by the Approved Source Facts, provide a concise, plain-language answer (2-3 sentences) in the requested language and set supported_by_source to true.\n"
-        "2. If the user's question is NOT covered by the Approved Source Facts, or asks for personal medical advice, diagnosis, medications, or unrelated topics, politely state that the current learning material for this topic does not cover that question and remind them that SehatSaathi AI provides general education only (set supported_by_source to false).\n"
+        "2. If the user's question is NOT covered by the Approved Source Facts, or asks for personal medical advice, diagnosis, medications, or unrelated topics, politely state that the current learning material does not cover that question and remind them that SehatSaathi AI provides general education only (set supported_by_source to false).\n"
         "3. Never invent facts, statistics, clinical advice, or URLs.\n"
         "4. Return ONLY valid JSON with keys: {\"answer\": string, \"supported_by_source\": boolean}."
     )
 
     user_prompt = (
-        f"Topic: {topic['title_en']} ({topic['title_ur']})\n"
+        f"Selected Topic: {topic['title_en']} ({topic['title_ur']})\n"
         f"Target Language: {lang_label}\n"
         f"Approved Source Facts:\n{facts_bulleted}\n\n"
         f"User Question: {cleaned_q}\n"

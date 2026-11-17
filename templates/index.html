@@ -89,9 +89,17 @@
               <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M7 11V5a1.5 1.5 0 0 1 3 0v4m0 0V3.5a1.5 1.5 0 0 1 3 0V9m0 0V4.5a1.5 1.5 0 0 1 3 0V9m0 0V6.5a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-2a6 6 0 0 1-5.66-4L4.1 12.3a1.5 1.5 0 0 1 2.6-1.3L7 11Z"/>
               </svg>
-              {% else %}
+              {% elif topic.id == 'sleep' %}
               <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+              </svg>
+              {% elif topic.id == 'activity' %}
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+              </svg>
+              {% else %}
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
               </svg>
               {% endif %}
             </div>
@@ -265,50 +273,51 @@
             </div>
           </div>
         </div>
-
-        <!-- Constrained Topic Follow-Up Card -->
-        <div class="result-card followup-card" aria-labelledby="followup-title">
-          <div class="panel-header">
-            <span class="step-pill">Optional</span>
-            <h3 id="followup-title" class="panel-title">Ask a Question About This Topic</h3>
-          </div>
-          <p class="panel-subtitle">
-            Questions are answered strictly from the selected topic's approved CDC facts. Personal symptoms, diagnoses, or prescriptions are not supported.
-          </p>
-
-          <div id="followup-suggestions" class="suggestion-chips" aria-label="Suggested questions"></div>
-
-          <form id="followup-form" class="followup-form" novalidate>
-            <label for="followup-input" class="sr-only">Ask a short educational question about this topic</label>
-            <div class="followup-input-row">
-              <input
-                type="text"
-                id="followup-input"
-                class="followup-input"
-                maxlength="280"
-                placeholder="e.g., How many seconds should I scrub my hands with soap?"
-                autocomplete="off"
-              >
-              <button type="submit" id="followup-submit-btn" class="secondary-btn">
-                Ask AI
-              </button>
-            </div>
-          </form>
-
-          <div id="followup-loading" class="followup-status hidden" role="status">
-            Checking approved topic facts with live AI...
-          </div>
-
-          <div id="followup-error" class="followup-error hidden" role="alert"></div>
-
-          <div id="followup-result" class="followup-result hidden" role="status" aria-live="polite">
-            <div class="followup-result__meta" dir="ltr">
-              <span id="followup-badge" class="badge badge--neutral">Source-Grounded Answer</span>
-            </div>
-            <p id="followup-answer-text" class="followup-result__text"></p>
-          </div>
-        </div>
       </article>
+
+      <!-- Always-Visible Direct AI Question Card (Grounded in Curated CDC Knowledge Base) -->
+      <div class="result-card direct-ai-card" aria-labelledby="followup-title">
+        <div class="panel-header">
+          <span class="step-pill">Direct AI Q&amp;A</span>
+          <h3 id="followup-title" class="panel-title">Ask SehatSaathi AI Directly</h3>
+        </div>
+        <p class="panel-subtitle">
+          Type any educational question about the selected topic (<strong id="direct-ask-topic-name">Proper Handwashing</strong>) or click a suggested question below. Answered live by Gemini using approved CDC facts.
+        </p>
+
+        <div id="followup-suggestions" class="suggestion-chips" aria-label="Suggested questions"></div>
+
+        <form id="followup-form" class="followup-form" novalidate>
+          <label for="followup-input" class="sr-only">Ask a short educational question about this topic</label>
+          <div class="followup-input-row">
+            <input
+              type="text"
+              id="followup-input"
+              class="followup-input"
+              maxlength="280"
+              placeholder="e.g., How many seconds should I scrub my hands with soap?"
+              autocomplete="off"
+            >
+            <button type="submit" id="followup-submit-btn" class="secondary-btn">
+              Ask AI
+            </button>
+          </div>
+        </form>
+
+        <div id="followup-loading" class="followup-status hidden" role="status">
+          Checking approved topic facts with live AI...
+        </div>
+
+        <div id="followup-error" class="followup-error hidden" role="alert"></div>
+
+        <div id="followup-result" class="followup-result hidden" role="status" aria-live="polite">
+          <div class="followup-result__meta" dir="ltr">
+            <span id="followup-badge" class="badge badge--neutral">Source-Grounded Answer</span>
+            <span id="followup-source-note" class="followup-source-note"></span>
+          </div>
+          <p id="followup-answer-text" class="followup-result__text"></p>
+        </div>
+      </div>
     </section>
   </main>
 

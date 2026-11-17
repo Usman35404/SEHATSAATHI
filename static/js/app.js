@@ -73,7 +73,9 @@
   const followupError = document.getElementById("followup-error");
   const followupResult = document.getElementById("followup-result");
   const followupBadge = document.getElementById("followup-badge");
+  const followupSourceNote = document.getElementById("followup-source-note");
   const followupAnswerText = document.getElementById("followup-answer-text");
+  const directAskTopicName = document.getElementById("direct-ask-topic-name");
 
   // Usability helpers (loading progress, model badge, suggestions, config check)
   const loadingElapsed = document.getElementById("loading-elapsed");
@@ -100,6 +102,14 @@
     sleep: {
       en: ["How many hours should a teenager sleep?", "How can I sleep better at night?", "Why is sleep important?"],
       ur: ["نوجوانوں کو کتنے گھنٹے سونا چاہیے؟", "رات کو بہتر نیند کیسے لیں؟", "نیند کیوں ضروری ہے؟"],
+    },
+    activity: {
+      en: ["What are the immediate benefits of physical activity?", "How does exercise help bones and muscles?", "How does activity help children?"],
+      ur: ["جسمانی سرگرمی کے فوری فوائد کیا ہیں؟", "ورزش ہڈیوں اور پٹھوں کو کیسے مضبوط کرتی ہے؟", "بچوں کے لیے ورزش کیوں ضروری ہے؟"],
+    },
+    hydration: {
+      en: ["Why is drinking enough water important?", "What are healthy alternatives to sugary drinks?", "How can I drink more water daily?"],
+      ur: ["مناسب مقدار میں پانی پینا کیوں ضروری ہے؟", "میٹھے مشروبات کا صحت مند متبادل کیا ہے؟", "روزانہ زیادہ پانی پینے کے آسان طریقے کیا ہیں؟"],
     },
   };
 
@@ -223,11 +233,17 @@
     });
 
     if (activeCard && selectedTopicLabel) {
-      selectedTopicLabel.textContent =
+      const labelText =
         state.selectedLanguage === "ur"
           ? `${activeCard.dataset.titleEn} (${activeCard.dataset.titleUr})`
           : activeCard.dataset.titleEn;
+      selectedTopicLabel.textContent = labelText;
+      if (directAskTopicName) {
+        directAskTopicName.textContent = labelText;
+      }
     }
+
+    renderSuggestions(state.selectedTopicId, state.selectedLanguage);
 
     const isUrdu = state.selectedLanguage === "ur";
     langEnBtn.classList.toggle("is-active", !isUrdu);
@@ -583,18 +599,19 @@
     stopAudioBtn.addEventListener("click", stopSpeech);
   }
 
-  // Event Listener: Constrained Follow-Up Question
+  // Event Listener: Direct / Constrained Follow-Up Question
   if (followupForm) {
     followupForm.addEventListener("submit", async (event) => {
       event.preventDefault();
-      if (!state.currentResult) {
-        return;
-      }
+      const targetTopicId =
+        (state.currentResult && state.currentResult.topic_id) || state.selectedTopicId;
+      const targetLanguage =
+        (state.currentResult && state.currentResult.language) || state.selectedLanguage;
 
       const questionText = (followupInput.value || "").trim();
       if (!questionText) {
         followupError.textContent =
-          state.selectedLanguage === "ur"
+          targetLanguage === "ur"
             ? "براہِ کرم اپنا سوال درج کریں۔"
             : "Please enter a short question about this topic.";
         followupError.classList.remove("hidden");
@@ -612,8 +629,8 @@
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            topic_id: state.currentResult.topic_id,
-            language: state.currentResult.language,
+            topic_id: targetTopicId,
+            language: targetLanguage,
             question: questionText,
           }),
         });
@@ -649,6 +666,10 @@
         } else {
           followupBadge.classList.add("badge--neutral");
           followupBadge.textContent = "Outside Current Topic Facts";
+        }
+
+        if (followupSourceNote && payload.source && payload.source.title) {
+          followupSourceNote.textContent = `Source: ${payload.source.title}`;
         }
 
         followupResult.classList.remove("hidden");

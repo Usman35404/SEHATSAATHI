@@ -35,5 +35,41 @@
       "To sleep better, turn off electronic screens (phones, TVs, computers) at least 30 minutes before bedtime, avoid large meals and caffeine late in the day, and stay physically active during the day.",
       "If someone consistently struggles with falling or staying asleep or feels overly sleepy during the day, they should speak with a qualified healthcare professional for personal guidance."
     ]
+  },
+  {
+    "id": "activity",
+    "title_en": "Physical Activity Basics",
+    "title_ur": "جسمانی سرگرمی اور ورزش کے فوائد",
+    "summary_en": "Discover how regular physical movement supports heart health, mood, sleep quality, bone strength, and everyday energy.",
+    "summary_ur": "جانیں کہ باقاعدہ جسمانی سرگرمی اور حرکت دل کی صحت، ذہنی سکون، بہتر نیند اور ہڈیوں کی مضبوطی میں کیسے مدد کرتی ہے۔",
+    "source_title": "CDC — Benefits of Physical Activity",
+    "source_url": "https://www.cdc.gov/physical-activity-basics/benefits/",
+    "last_reviewed": "2026-11-17",
+    "scope_boundary": "General physical activity education only; does not prescribe medical exercise rehabilitation or clinical care.",
+    "facts": [
+      "Regular physical activity is one of the most important habits for maintaining health across all ages, offering both immediate and long-term well-being benefits.",
+      "Immediate benefits of physical activity for adults include reduced short-term feelings of anxiety, better sleep quality, and support for healthy blood pressure.",
+      "Over the long term, regular movement helps lower the risk of heart disease, stroke, and type 2 diabetes, while supporting healthy weight management.",
+      "Physical activity strengthens bones and muscles, improves balance and coordination, and helps keep thinking, learning, and memory skills sharp.",
+      "For children and adolescents, regular physical activity supports healthy bone and muscle growth, cardiovascular fitness, attention, and positive mental well-being."
+    ]
+  },
+  {
+    "id": "hydration",
+    "title_en": "Water & Healthy Hydration",
+    "title_ur": "پانی اور صحت مند مشروبات",
+    "summary_en": "Learn why drinking enough clean water matters for body temperature, joints, and focus, and how to replace sugary drinks.",
+    "summary_ur": "جسمانی درجہ حرارت، جوڑوں اور ذہنی توجہ کے لیے مناسب مقدار میں پانی پینے کی اہمیت اور میٹھے مشروبات سے پرہیز کے طریقے جانیں۔",
+    "source_title": "CDC — About Water and Healthier Drinks",
+    "source_url": "https://www.cdc.gov/healthy-weight-growth/water-healthy-drinks/",
+    "last_reviewed": "2026-11-17",
+    "scope_boundary": "General hydration education only; does not provide medical fluid restriction advice or clinical dehydration treatment.",
+    "facts": [
+      "Drinking enough water every day helps prevent dehydration, which can cause unclear thinking, mood changes, overheating, constipation, and kidney stones.",
+      "Water helps the body keep a normal temperature, lubricates and cushions joints, protects sensitive tissues, and removes waste through urination and sweat.",
+      "Plain water has zero calories, making it the healthiest everyday substitute for sugary drinks like sodas, energy drinks, and sweetened juices.",
+      "Daily fluid needs vary by age, physical activity level, weather, and health status, and come from plain water, other beverages, and water-rich fruits and vegetables.",
+      "Practical ways to drink more water include carrying a reusable water bottle, choosing water during meals, and adding a slice of lemon or lime for natural flavor."
+    ]
   }
 ]

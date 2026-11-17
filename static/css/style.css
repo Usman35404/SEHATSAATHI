@@ -915,6 +915,25 @@ body {
   border-color: var(--brand-primary);
 }
 
+.direct-ai-card {
+  margin-top: 1.25rem;
+}
+
+.followup-result__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.45rem;
+}
+
+.followup-source-note {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
 @media (max-width: 600px) {
   .brand__title { font-size: 1.2rem; }
   .header-controls { width: 100%; justify-content: space-between; }
